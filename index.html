@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>真實數據版：台灣全區 10 天浪點預報 (完整資訊無簡化版)</title>
+    <title>真實數據版：台灣全區 10 天浪點預報 (週末一週浪高圖版)</title>
     
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
@@ -132,7 +132,6 @@
             z-index: 10;
         }
 
-        /* 確保卡片有足夠空間完整顯示所有文字標題與數值 */
         .forecast-container {
             display: grid; 
             grid-template-columns: repeat(auto-fit, minmax(420px, 1fr)); 
@@ -146,11 +145,17 @@
             display: flex; flex-direction: column; transition: transform 0.2s;
         }
         .day-card:hover { transform: translateY(-3px); }
-        .weekend-card { border-top-color: var(--secondary); }
+        .weekend-card { 
+            border-top-color: var(--secondary); 
+            cursor: pointer; 
+        }
+        .weekend-card:hover {
+            border-top-color: var(--primary);
+            box-shadow: 0 6px 12px rgba(0, 184, 148, 0.2);
+        }
         
         .date-title { font-weight: bold; font-size: 1.1rem; text-align: center; margin-bottom: 15px; border-bottom: 1px solid var(--border-color); padding-bottom: 10px; }
         
-        /* 完整不簡化的摘要欄位 */
         .summary-grid { 
             display: flex; justify-content: space-between; gap: 6px;
             margin-bottom: 15px; font-size: 0.75rem; color: #636e72; text-align: center; 
@@ -164,7 +169,6 @@
         .period-text { color: #8e44ad; }
         .dir-text { color: #2c3e50; font-size: 0.95rem !important; }
 
-        /* 天氣預報列保持完整資訊 */
         .weather-strip {
             display: flex;
             justify-content: space-around;
@@ -217,8 +221,8 @@
 <body>
 
     <div class="version-badge">
-        <div>📦 <strong>Version:</strong> v1.24 (完整無簡化版)</div>
-        <div>🕒 <strong>完成時間:</strong> 2026-08-05 19:05</div>
+        <div>📦 <strong>Version:</strong> v1.26 (週末一週浪高圖版)</div>
+        <div>🕒 <strong>完成時間:</strong> 2026-08-05 19:30</div>
     </div>
 
     <div class="top-dashboard">
@@ -540,7 +544,6 @@
                     if (maxWind >= 9) maxWindColor = 'var(--danger)'; 
                     else if (maxWind >= 6) maxWindColor = 'var(--warning)'; 
 
-                    // 確保卡片頂端摘要文字完整保留，絕不簡化
                     card.innerHTML = `
                         <div class="date-title">📅 ${titleDate}</div>
                         <div class="summary-grid">
@@ -720,8 +723,9 @@
 
                 dataArray.forEach((spotData, index) => {
                     const spotKey = spotKeys[index];
-                    const spotObj = spots[spotKey];
-                    const spotName = document.querySelector(`#spot-select option[value="${spotKey}"]`).innerText.split(' ').pop(); 
+                    const optionEl = document.querySelector(`#spot-select option[value="${spotKey}"]`);
+                    if(!optionEl) return;
+                    const spotName = optionEl.innerText.split(' ').pop(); 
 
                     let satMax = 0, sunMax = 0;
                     satIndices.forEach(idx => { if(spotData.hourly.wave_height[idx] > satMax) satMax = spotData.hourly.wave_height[idx]; });
@@ -739,11 +743,12 @@
 
                     if (matches) {
                         matchingSpots.push({
+                            spotKey: spotKey,
                             name: spotName,
                             satMax: satIndices.length > 0 ? satMax.toFixed(2) : '-',
                             sunMax: sunIndices.length > 0 ? sunMax.toFixed(2) : '-',
-                            tideSatHTML: getTidesHTMLString(targetSat, spotObj.tideOffset),
-                            tideSunHTML: getTidesHTMLString(targetSun, spotObj.tideOffset)
+                            waveTimes: spotData.hourly.time,
+                            waveValues: spotData.hourly.wave_height
                         });
                     }
                 });
@@ -751,23 +756,74 @@
                 if(matchingSpots.length === 0) {
                     grid.innerHTML = '<div class="alert">本週末沒有平均浪高落在此區間的浪點。</div>';
                 } else {
-                    matchingSpots.forEach(spot => {
+                    matchingSpots.forEach((spot, idx) => {
                         const card = document.createElement('div');
                         card.className = 'day-card weekend-card';
+                        card.onclick = function() {
+                            const selectEl = document.getElementById('spot-select');
+                            selectEl.value = spot.spotKey;
+                            fetchSpotData();
+                        };
+                        const canvasId = `weekend-chart-${idx}`;
                         card.innerHTML = `
-                            <div class="date-title">📍 ${spot.name}</div>
-                            <div class="tide-box" style="font-size: 0.8rem; margin-top: 5px;">
-                                <div style="color:#2d3436; margin-bottom:4px;">週六潮汐：</div>
-                                ${spot.tideSatHTML}
-                                <div style="color:#2d3436; margin:8px 0 4px 0;">週日潮汐：</div>
-                                ${spot.tideSunHTML}
+                            <div class="date-title">📍 ${spot.name} (點擊看 10 天預報)</div>
+                            <div class="chart-container" style="height: 180px; margin-bottom: 15px;">
+                                <canvas id="${canvasId}"></canvas>
                             </div>
-                            <div class="summary-box">
+                            <div class="summary-box" style="display:flex; justify-content:space-around; font-size:0.9rem; color:#636e72; text-align:center;">
                                 <div class="summary-item">週六最大浪<strong>${spot.satMax} m</strong></div>
                                 <div class="summary-item">週日最大浪<strong>${spot.sunMax} m</strong></div>
                             </div>
                         `;
                         grid.appendChild(card);
+
+                        // 渲染週末卡片的一週浪高趨勢小圖表
+                        const ctx = document.getElementById(canvasId).getContext('2d');
+                        const labels = spot.waveTimes.map(t => {
+                            const d = new Date(t);
+                            return `${d.getMonth()+1}/${d.getDate()} ${d.getHours().toString().padStart(2,'0')}:00`;
+                        });
+                        
+                        const miniChart = new Chart(ctx, {
+                            type: 'line',
+                            data: {
+                                labels: labels,
+                                datasets: [{
+                                    label: '浪高 (m)',
+                                    data: spot.waveValues,
+                                    borderColor: '#0984e3',
+                                    backgroundColor: 'rgba(9, 132, 227, 0.1)',
+                                    borderWidth: 2,
+                                    pointRadius: 0,
+                                    fill: true,
+                                    tension: 0.4
+                                }]
+                            },
+                            options: {
+                                responsive: true,
+                                maintainAspectRatio: false,
+                                plugins: { legend: { display: false } },
+                                scales: {
+                                    x: {
+                                        ticks: {
+                                            font: { size: 8 },
+                                            callback: function(val, index) {
+                                                const label = this.getLabelForValue(val);
+                                                if (label.includes('08:00')) return label.split(' ')[0];
+                                                return null;
+                                            }
+                                        },
+                                        grid: { display: false }
+                                    },
+                                    y: {
+                                        beginAtZero: true,
+                                        suggestedMax: 2.0,
+                                        ticks: { font: { size: 8 } }
+                                    }
+                                }
+                            }
+                        });
+                        chartInstances.push(miniChart);
                     });
                 }
             } catch (error) {
