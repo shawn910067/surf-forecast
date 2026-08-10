@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>真實數據版：台灣全區 10 天浪點預報 (iPhone RWD 自適應版)</title>
+    <title>真實數據版：台灣全區 10 天浪點預報 (手機三欄顯示版)</title>
     
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
@@ -24,7 +24,7 @@
             background-color: var(--bg-color);
             color: var(--text-main);
             margin: 0;
-            padding: 20px;
+            padding: 10px;
         }
         
         .version-badge {
@@ -46,14 +46,13 @@
         .source-link { color: var(--primary); text-decoration: none; }
         .source-link:hover { text-decoration: underline; }
 
-        /* 電腦版維持精準對稱 Grid */
         .top-dashboard {
             display: grid;
-            grid-template-columns: 440px 1fr 440px; 
+            grid-template-columns: 350px 1fr 350px; 
             align-items: center;
-            max-width: 1500px;
-            margin: 0 auto 30px auto;
-            gap: 20px;
+            max-width: 1600px;
+            margin: 0 auto 20px auto;
+            gap: 15px;
         }
 
         .dashboard-center {
@@ -64,29 +63,29 @@
             grid-column: 2; 
         }
 
-        header { text-align: center; margin-bottom: 15px; }
-        h1 { color: var(--primary); margin-bottom: 8px; font-size: 1.8rem; }
-        .subtitle { color: #636e72; margin-bottom: 10px; font-size: 0.95rem; }
+        header { text-align: center; margin-bottom: 10px; }
+        h1 { color: var(--primary); margin-bottom: 5px; font-size: 1.5rem; }
+        .subtitle { color: #636e72; margin-bottom: 8px; font-size: 0.85rem; }
         .legend-badge {
-            display: inline-block; font-size: 0.8rem; padding: 4px 8px;
+            display: inline-block; font-size: 0.75rem; padding: 2px 6px;
             border-radius: 12px; margin: 2px; color: white; font-weight: bold;
         }
         .bg-green { background-color: var(--secondary); }
         .bg-yellow { background-color: var(--warning); }
         .bg-red { background-color: var(--danger); }
         .bg-purple { background-color: var(--model-alt); }
-        .legend-container { margin-bottom: 15px; text-align: center;}
+        .legend-container { margin-bottom: 10px; text-align: center;}
         
         .dropdown-group {
             display: flex;
-            gap: 15px;
+            gap: 10px;
             flex-wrap: wrap;
             justify-content: center;
         }
         
         select {
-            padding: 12px 15px; font-size: 1rem; border: 2px solid var(--primary); 
-            border-radius: 8px; min-width: 280px; background-color: white; height: 50px;
+            padding: 10px 12px; font-size: 0.9rem; border: 2px solid var(--primary); 
+            border-radius: 8px; min-width: 240px; background-color: white; height: 42px;
             cursor: pointer; outline: none; box-shadow: 0 4px 6px rgba(9, 132, 227, 0.1); transition: all 0.3s;
         }
         select:focus { border-color: var(--primary-dark); }
@@ -100,8 +99,8 @@
 
         .mini-map-container {
             position: relative;
-            width: 440px; 
-            height: 200px;
+            width: 350px; 
+            height: 160px;
             border-radius: 8px;
             overflow: hidden;
             box-shadow: 0 4px 6px rgba(9, 132, 227, 0.15);
@@ -128,105 +127,102 @@
             background: rgba(41, 128, 185, 0.9); 
             color: white;
             text-align: center;
-            font-size: 0.95rem;
+            font-size: 0.85rem;
             font-weight: bold;
-            padding: 8px 0;
+            padding: 6px 0;
             z-index: 10;
         }
 
+        /* === 關鍵修改：預報卡片外框設定自動多欄填滿 === */
         .forecast-container {
-            display: grid; grid-template-columns: repeat(auto-fit, minmax(420px, 1fr)); 
-            gap: 20px; max-width: 1500px; margin: 0 auto;
+            display: grid; 
+            /* 讓卡片最小寬度縮小至 300px，這樣在較寬的手機或平板上就能自動一排塞三個 */
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); 
+            gap: 12px; 
+            max-width: 1600px; 
+            margin: 0 auto;
         }
         .day-card {
-            background: var(--card-bg); border-radius: 12px; padding: 15px;
-            box-shadow: 0 4px 6px rgba(0,0,0,0.05); border-top: 5px solid var(--primary);
+            background: var(--card-bg); border-radius: 10px; padding: 10px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.05); border-top: 4px solid var(--primary);
             display: flex; flex-direction: column; transition: transform 0.2s;
         }
-        .day-card:hover { transform: translateY(-3px); }
+        .day-card:hover { transform: translateY(-2px); }
         .weekend-card { border-top-color: var(--secondary); }
         
-        .date-title { font-weight: bold; font-size: 1.1rem; text-align: center; margin-bottom: 15px; border-bottom: 1px solid var(--border-color); padding-bottom:10px; }
+        .date-title { font-weight: bold; font-size: 1rem; text-align: center; margin-bottom: 10px; border-bottom: 1px solid var(--border-color); padding-bottom: 6px; }
         
         .summary-grid { 
-            display: flex; justify-content: space-between; gap: 4px;
-            margin-bottom: 12px; font-size: 0.75rem; color: #636e72; text-align: center; 
+            display: flex; justify-content: space-between; gap: 3px;
+            margin-bottom: 8px; font-size: 0.7rem; color: #636e72; text-align: center; 
         }
         .summary-item { 
-            background: #f8f9fa; padding: 6px 2px; border-radius: 8px; border: 1px solid #f1f2f6;
+            background: #f8f9fa; padding: 4px 2px; border-radius: 6px; border: 1px solid #f1f2f6;
             flex: 1; min-width: 0; 
         }
-        .summary-item strong { display: block; font-size: 0.9rem; margin-top: 4px; }
+        .summary-item strong { display: block; font-size: 0.85rem; margin-top: 2px; }
         .wave-text { color: var(--primary); }
         .period-text { color: #8e44ad; }
-        .dir-text { color: #2c3e50; font-size: 0.85rem !important; }
+        .dir-text { color: #2c3e50; font-size: 0.75rem !important; }
 
         .weather-strip {
             display: flex;
             justify-content: space-around;
             background: #f1f8ff;
             border: 1px solid #d0e1fd;
-            border-radius: 8px;
-            padding: 6px 4px;
-            margin-bottom: 12px;
-            font-size: 0.75rem;
+            border-radius: 6px;
+            padding: 4px 2px;
+            margin-bottom: 8px;
+            font-size: 0.7rem;
             text-align: center;
         }
         .weather-slot {
             display: flex;
             flex-direction: column;
             align-items: center;
-            gap: 2px;
+            gap: 1px;
             flex: 1;
         }
-        .weather-time { color: #636e72; font-size: 0.65rem; }
-        .weather-icon { font-size: 1rem; }
+        .weather-time { color: #636e72; font-size: 0.6rem; }
+        .weather-icon { font-size: 0.9rem; }
         
-        .chart-container { position: relative; height: 280px; width: 100%; margin-top: auto; }
+        .chart-container { position: relative; height: 220px; width: 100%; margin-top: auto; }
         .alert { grid-column: 1 / -1; background-color: #ffeaa7; color: #d63031; padding: 15px; border-radius: 8px; text-align: center; font-size: 1.1rem; }
         #loading { text-align: center; color: var(--primary); font-weight: bold; display: none; margin-bottom: 20px;}
         
         .tide-box {
             background-color: #f8f9fa; border-radius: 8px; padding: 10px;
-            margin-bottom: 15px; text-align: center; font-size: 0.9rem;
+            margin-bottom: 15px; text-align: center; font-size: 0.85rem;
             color: var(--primary-dark); border: 1px solid var(--border-color);
         }
-        .tide-item { display: inline-block; margin: 0 5px; padding: 2px 5px; }
+        .tide-item { display: inline-block; margin: 0 4px; padding: 2px 4px; }
         .tide-high { font-weight: bold; color: var(--primary); }
         .tide-low { color: #636e72; }
 
-        /* === 📱 iPhone / 手機版響應式優化 (RWD Media Query) === */
-        @media (max-width: 900px) {
-            body { padding: 10px; }
-            .version-badge { display: none; } /* 手機上隱藏版本浮動標籤避免佔畫面 */
-            
-            /* 將頂部儀表板改為單欄上下堆疊 */
+        /* 📱 針對極窄手機螢幕的彈性處理 */
+        @media (max-width: 768px) {
+            .version-badge { display: none; }
             .top-dashboard {
                 display: flex;
                 flex-direction: column;
                 align-items: center;
-                gap: 15px;
+                gap: 10px;
             }
-            .top-dashboard > div:first-child { display: none; } /* 隱藏電腦版左側平衡佔位 */
-            
-            .dashboard-center { width: 100%; }
-            .dashboard-right { width: 100%; justify-content: center; }
-            
-            /* 下拉選單與地圖改為 100% 寬度以適應手機螢幕 */
+            .top-dashboard > div:first-child { display: none; }
+            .dashboard-center, .dashboard-right { width: 100%; }
             .dropdown-group { width: 100%; flex-direction: column; align-items: stretch; }
             select { width: 100%; min-width: 0; }
-            .mini-map-container { width: 100%; max-width: 440px; height: 180px; }
+            .mini-map-container { width: 100%; max-width: 100%; height: 150px; }
             
-            /* 圖表卡片改為單欄佔滿 */
-            .forecast-container { grid-template-columns: 1fr; }
+            /* 若手機橫放或螢幕夠寬，auto-fit 會自動幫你排三個；直向若空間不足，會自動變成一排兩個或一個，確保不變形 */
         }
     </style>
 </head>
 <body>
 
     <div class="version-badge">
-        <div>📦 <strong>Version:</strong> v1.21 (iPhone RWD 自適應版)</div>
-        <div>🕒 <strong>完成時間:</strong> 2026-08-05 18:40</div>
+        <div>📦 <strong>Version:</strong> v1.22 (手機三欄自適應版)</div>
+        <div>🕒 <strong>完成時間:</strong> 2026-08-05 18:50</div>
         <div style="margin-top: 4px; border-top: 1px solid #dfe6e9; padding-top: 4px;">
             🌊 模型: <a href="https://open-meteo.com/" target="_blank" class="source-link">Best Match & GFS</a><br>
             💨 風速: <a href="https://api.open-meteo.com/" target="_blank" class="source-link">Weather API</a>
