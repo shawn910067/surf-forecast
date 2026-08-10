@@ -1,0 +1,796 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>真實數據版：台灣全區 10 天浪點預報 (天氣圖示版)</title>
+    
+    <!-- PWA / iOS 專屬支援設定 -->
+    <link rel="manifest" href="manifest.json">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="台灣浪點預報">
+    <link rel="apple-touch-icon" href="icon-192.png">
+
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        :root {
+            --primary: #0984e3;
+            --primary-dark: #076bb8;
+            --secondary: #00b894; 
+            --warning: #f39c12;   
+            --danger: #d63031;    
+            --model-alt: #9b59b6; 
+            --bg-color: #f1f2f6;
+            --card-bg: #ffffff;
+            --text-main: #2d3436;
+            --border-color: #dfe6e9;
+        }
+        body {
+            font-family: 'Helvetica Neue', Arial, '微軟正黑體', sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-main);
+            margin: 0;
+            padding: 20px;
+            padding-top: env(safe-area-inset-top, 20px);
+        }
+        
+        .version-badge {
+            position: fixed;
+            top: 15px;
+            left: 15px;
+            background: rgba(255, 255, 255, 0.95);
+            padding: 10px 14px;
+            border-radius: 8px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.08);
+            font-size: 0.8rem;
+            color: #636e72;
+            z-index: 1000;
+            border-left: 4px solid var(--primary);
+            line-height: 1.4;
+            backdrop-filter: blur(5px);
+            max-width: 280px;
+        }
+        .version-badge strong { color: var(--text-main); }
+        .source-link { color: var(--primary); text-decoration: none; }
+        .source-link:hover { text-decoration: underline; }
+
+        .top-dashboard {
+            display: grid;
+            grid-template-columns: 440px 1fr 440px; 
+            align-items: center;
+            max-width: 1500px;
+            margin: 0 auto 30px auto;
+            gap: 20px;
+        }
+
+        .dashboard-center {
+            display: flex;
+            flex-direction: column;
+            align-items: center; 
+            justify-content: center;
+            grid-column: 2; 
+        }
+
+        header { text-align: center; margin-bottom: 15px; }
+        h1 { color: var(--primary); margin-bottom: 8px; font-size: 1.8rem; }
+        .subtitle { color: #636e72; margin-bottom: 10px; font-size: 0.95rem; }
+        .legend-badge {
+            display: inline-block; font-size: 0.8rem; padding: 4px 8px;
+            border-radius: 12px; margin: 2px; color: white; font-weight: bold;
+        }
+        .bg-green { background-color: var(--secondary); }
+        .bg-yellow { background-color: var(--warning); }
+        .bg-red { background-color: var(--danger); }
+        .bg-purple { background-color: var(--model-alt); }
+        .legend-container { margin-bottom: 15px; text-align: center;}
+        
+        .dropdown-group {
+            display: flex;
+            gap: 15px;
+            flex-wrap: wrap;
+            justify-content: center;
+        }
+        
+        select {
+            padding: 12px 15px; font-size: 1rem; border: 2px solid var(--primary); 
+            border-radius: 8px; min-width: 280px; background-color: white; height: 50px;
+            cursor: pointer; outline: none; box-shadow: 0 4px 6px rgba(9, 132, 227, 0.1); transition: all 0.3s;
+        }
+        select:focus { border-color: var(--primary-dark); }
+        #weekend-select { border-color: var(--secondary); box-shadow: 0 4px 6px rgba(0, 184, 148, 0.1); }
+        
+        .dashboard-right {
+            display: flex;
+            justify-content: flex-end;
+            grid-column: 3; 
+        }
+
+        .mini-map-container {
+            position: relative;
+            width: 440px; 
+            height: 200px;
+            border-radius: 8px;
+            overflow: hidden;
+            box-shadow: 0 4px 6px rgba(9, 132, 227, 0.15);
+            border: 2px solid #2c3e50; 
+            transition: all 0.3s;
+            cursor: pointer;
+            background-color: #e0e0e0;
+        }
+        .mini-map-container:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 12px rgba(9, 132, 227, 0.25);
+            border-color: var(--primary-dark);
+        }
+        .mini-map-container iframe {
+            width: 100%;
+            height: 140%; 
+            margin-top: -10%; 
+            border: 0;
+            pointer-events: none; 
+        }
+        .mini-map-overlay {
+            position: absolute;
+            bottom: 0; left: 0; width: 100%;
+            background: rgba(41, 128, 185, 0.9); 
+            color: white;
+            text-align: center;
+            font-size: 0.95rem;
+            font-weight: bold;
+            padding: 8px 0;
+            z-index: 10;
+        }
+
+        .forecast-container {
+            display: grid; grid-template-columns: repeat(auto-fit, minmax(450px, 1fr)); 
+            gap: 20px; max-width: 1500px; margin: 0 auto;
+        }
+        .day-card {
+            background: var(--card-bg); border-radius: 12px; padding: 15px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.05); border-top: 5px solid var(--primary);
+            display: flex; flex-direction: column; transition: transform 0.2s;
+        }
+        .day-card:hover { transform: translateY(-3px); }
+        .weekend-card { border-top-color: var(--secondary); }
+        
+        .date-title { font-weight: bold; font-size: 1.1rem; text-align: center; margin-bottom: 15px; border-bottom: 1px solid var(--border-color); padding-bottom:10px; }
+        
+        .summary-grid { 
+            display: flex; justify-content: space-between; gap: 6px;
+            margin-bottom: 12px; font-size: 0.75rem; color: #636e72; text-align: center; 
+        }
+        .summary-item { 
+            background: #f8f9fa; padding: 8px 2px; border-radius: 8px; border: 1px solid #f1f2f6;
+            flex: 1; min-width: 0; 
+        }
+        .summary-item strong { display: block; font-size: 1rem; margin-top: 4px; }
+        .wave-text { color: var(--primary); }
+        .period-text { color: #8e44ad; }
+        .dir-text { color: #2c3e50; font-size: 0.95rem !important; }
+
+        .weather-strip {
+            display: flex;
+            justify-content: space-around;
+            background: #f1f8ff;
+            border: 1px solid #d0e1fd;
+            border-radius: 8px;
+            padding: 6px 4px;
+            margin-bottom: 12px;
+            font-size: 0.75rem;
+            text-align: center;
+        }
+        .weather-slot {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 2px;
+            flex: 1;
+        }
+        .weather-time { color: #636e72; font-size: 0.65rem; }
+        .weather-icon { font-size: 1rem; }
+        
+        .chart-container { position: relative; height: 280px; width: 100%; margin-top: auto; }
+        .alert { grid-column: 1 / -1; background-color: #ffeaa7; color: #d63031; padding: 15px; border-radius: 8px; text-align: center; font-size: 1.1rem; }
+        #loading { text-align: center; color: var(--primary); font-weight: bold; display: none; margin-bottom: 20px;}
+        
+        .tide-box {
+            background-color: #f8f9fa; border-radius: 8px; padding: 10px;
+            margin-bottom: 15px; text-align: center; font-size: 0.9rem;
+            color: var(--primary-dark); border: 1px solid var(--border-color);
+        }
+        .tide-item { display: inline-block; margin: 0 5px; padding: 2px 5px; }
+        .tide-high { font-weight: bold; color: var(--primary); }
+        .tide-low { color: #636e72; }
+    </style>
+</head>
+<body>
+
+    <!-- 左上角版本與即時偵錯狀態列 -->
+    <div class="version-badge">
+        <div>📦 <strong>Version:</strong> v1.22 (iOS 偵錯版)</div>
+        <div>🕒 <strong>狀態:</strong> <span id="status-text" style="color:var(--secondary);">就緒</span></div>
+        <div id="error-log" style="margin-top: 4px; padding-top: 4px; border-top: 1px solid #dfe6e9; color: var(--danger); font-size: 0.7rem; display: none;"></div>
+        <div style="margin-top: 4px; border-top: 1px solid #dfe6e9; padding-top: 4px;">
+            🌊 模型: <a href="https://open-meteo.com/" target="_blank" class="source-link">Best Match & GFS</a><br>
+            💨 風速: <a href="https://api.open-meteo.com/" target="_blank" class="source-link">Weather API</a>
+        </div>
+    </div>
+
+    <div class="top-dashboard">
+        <div></div>
+
+        <div class="dashboard-center">
+            <header>
+                <h1>📡 台灣全區浪點預報</h1>
+                <div class="subtitle">浪高、風速、週期與方向全視角整合</div>
+                <div class="legend-container">
+                    <span class="legend-badge bg-green">風速 < 6</span>
+                    <span class="legend-badge bg-yellow">風速 6~9</span>
+                    <span class="legend-badge bg-red">風速 > 9</span>
+                    <span class="legend-badge bg-purple" style="margin-left: 15px; border-radius: 4px;">GFS 輔助模型</span>
+                </div>
+            </header>
+
+            <div class="dropdown-group">
+                <select id="spot-select" onchange="fetchSpotData()">
+                    <option value="none" disabled>📍 選擇特定浪點 (10天趨勢)</option>
+                    <optgroup label="北部海岸">
+                        <option value="shalun">新北 沙崙</option>
+                        <option value="baishawan">新北 白沙灣</option>
+                        <option value="jinshan" selected>新北 金山中角灣</option>
+                        <option value="greenbay">新北 萬里翡翠灣</option>
+                        <option value="fulong">新北 福隆</option>
+                    </optgroup>
+                    <optgroup label="東北部與宜蘭">
+                        <option value="daxi">宜蘭 大溪蜜月灣</option>
+                        <option value="shuangshi">宜蘭 雙獅</option>
+                        <option value="waiao">宜蘭 外澳</option>
+                        <option value="wushi">宜蘭 烏石港</option>
+                        <option value="suao">宜蘭 蘇澳無尾港</option>
+                    </optgroup>
+                    <optgroup label="東部海岸">
+                        <option value="jiqi">花蓮 磯崎</option>
+                        <option value="chenggong">台東 成功</option>
+                        <option value="donghe">台東 東河</option>
+                        <option value="jinzun">台東 金樽</option>
+                        <option value="dulan">台東 都蘭</option>
+                    </optgroup>
+                    <optgroup label="南部海岸">
+                        <option value="jiupeng">屏東 九棚</option>
+                        <option value="jialeshui">屏東 墾丁佳樂水</option>
+                        <option value="nanwan">屏東 南灣</option>
+                    </optgroup>
+                    <optgroup label="西部海岸">
+                        <option value="zhunan">苗栗 竹南</option>
+                        <option value="waipu">苗栗 外埔</option>
+                        <option value="taichung">台中 松柏港</option>
+                        <option value="yuguang">台南 漁光島</option>
+                        <option value="cijin">高雄 旗津</option>
+                    </optgroup>
+                </select>
+
+                <select id="weekend-select" onchange="fetchWeekendData()">
+                    <option value="none" disabled selected>🏄 本週末浪高篩選 (全台)</option>
+                    <option value="0.5-1.0">推薦：0.5m ~ 1.0m (新手/長板)</option>
+                    <option value="1.0-1.5">推薦：1.0m ~ 1.5m (進階/短板)</option>
+                </select>
+            </div>
+        </div>
+        
+        <div class="dashboard-right">
+            <a id="spot-map-link" href="#" target="_blank" title="在新分頁開啟 Google Maps 導航" style="text-decoration: none; display: block;">
+                <div class="mini-map-container">
+                    <iframe id="mini-map-frame" src="" loading="lazy"></iframe>
+                    <div class="mini-map-overlay" id="map-overlay-text">📍 導航</div>
+                </div>
+            </a>
+        </div>
+    </div>
+
+    <div id="loading">📡 正在從多國氣象中心抓取模型資料...</div>
+    <div class="forecast-container" id="forecast-grid"></div>
+
+    <script>
+        // 偵錯輔助函式：將錯誤直接顯示在左上角介面上
+        function logError(msg) {
+            const log = document.getElementById('error-log');
+            const status = document.getElementById('status-text');
+            log.style.display = 'block';
+            log.innerHTML += `<div>⚠️ ${msg}</div>`;
+            status.innerText = "讀取異常";
+            status.style.color = "var(--danger)";
+            console.error(msg);
+        }
+
+        // 全域錯誤捕捉
+        window.onerror = function(message, source, lineno, colno, error) {
+            logError(`${message} (行: ${lineno})`);
+            return true;
+        };
+
+        let chartInstances = [];
+
+        const spots = {
+            shalun: { lat: 25.18, lon: 121.41, tideOffset: 0.5 },
+            baishawan: { lat: 25.28, lon: 121.52, tideOffset: 0.2 },
+            jinshan: { lat: 25.26, lon: 121.63, tideOffset: 0 },
+            greenbay: { lat: 25.19, lon: 121.68, tideOffset: 0 },
+            fulong: { lat: 25.02, lon: 121.94, tideOffset: -0.5 },
+            daxi: { lat: 24.93, lon: 121.89, tideOffset: -1.0 },
+            shuangshi: { lat: 24.88, lon: 121.84, tideOffset: -1.0 },
+            waiao: { lat: 24.87, lon: 121.84, tideOffset: -1.0 },
+            wushi: { lat: 24.86, lon: 121.84, tideOffset: -1.0 },
+            suao: { lat: 24.61, lon: 121.85, tideOffset: -1.2 },
+            jiqi: { lat: 23.70, lon: 121.55, tideOffset: -2.0 },
+            chenggong: { lat: 23.10, lon: 121.38, tideOffset: -2.0 },
+            donghe: { lat: 22.97, lon: 121.31, tideOffset: -2.0 },
+            jinzun: { lat: 22.95, lon: 121.29, tideOffset: -2.0 },
+            dulan: { lat: 22.88, lon: 121.23, tideOffset: -2.0 },
+            jiupeng: { lat: 22.12, lon: 120.89, tideOffset: -1.5 },
+            jialeshui: { lat: 21.99, lon: 120.84, tideOffset: -1.5 },
+            nanwan: { lat: 21.95, lon: 120.76, tideOffset: -1.5 },
+            zhunan: { lat: 24.69, lon: 120.85, tideOffset: 1.0 },
+            waipu: { lat: 24.64, lon: 120.77, tideOffset: 1.5 },
+            taichung: { lat: 24.41, lon: 120.61, tideOffset: 2.0 },
+            yuguang: { lat: 22.97, lon: 120.15, tideOffset: 1.5 },
+            cijin: { lat: 22.60, lon: 120.26, tideOffset: 1.0 }
+        };
+
+        function getWeatherIcon(code) {
+            if (code === 0) return { icon: '☀️', desc: '晴' };
+            if (code >= 1 && code <= 3) return { icon: '⛅', desc: '多雲' };
+            if (code >= 45 && code <= 48) return { icon: '🌫️', desc: '霧' };
+            if (code >= 51 && code <= 67) return { icon: '🌧️', desc: '雨' };
+            if (code >= 71 && code <= 77) return { icon: '❄️', desc: '雪' };
+            if (code >= 80 && code <= 82) return { icon: '🌧️', desc: '陣雨' };
+            if (code >= 95) return { icon: '⚡', desc: '雷雨' };
+            return { icon: '☁️', desc: '陰' };
+        }
+
+        function getDirectionArrow(degree) {
+            if (degree === null || degree === undefined) return '';
+            const arrows = ['↓', '↙', '←', '↖', '↑', '↗', '→', '↘'];
+            const index = Math.round(((degree %= 360) < 0 ? degree + 360 : degree) / 45) % 8;
+            return arrows[index];
+        }
+
+        function calculateTidesArray(dateStr, spotOffsetHours) {
+            const baselineDate = new Date('2026-08-01T08:00:00');
+            const baselineTide = baselineDate.getTime();
+            const cycleMs = (12 * 3600 * 1000) + (25 * 60 * 1000); 
+            const halfCycleMs = cycleMs / 2; 
+            const spotBaseline = baselineTide + (spotOffsetHours * 3600 * 1000);
+
+            const targetStart = new Date(dateStr).setHours(4,0,0,0);
+            const targetEnd = new Date(dateStr).setHours(19,59,59,999);
+
+            let cyclesPassed = Math.floor((targetStart - spotBaseline) / cycleMs);
+            let currentTide = spotBaseline + (cyclesPassed * cycleMs);
+            while (currentTide < targetStart) currentTide += cycleMs;
+            
+            let tides = [];
+            let t = currentTide - cycleMs; 
+            
+            for (let i = 0; i < 6; i++) { 
+                if (t >= targetStart && t <= targetEnd) tides.push({ type: '滿潮', time: t });
+                let lowTide = t + halfCycleMs;
+                if (lowTide >= targetStart && lowTide <= targetEnd) tides.push({ type: '乾潮', time: lowTide });
+                t += cycleMs;
+            }
+            tides.sort((a, b) => a.time - b.time);
+            return tides;
+        }
+
+        function getTidesHTMLString(dateStr, spotOffsetHours) {
+            const tides = calculateTidesArray(dateStr, spotOffsetHours);
+            let htmlStr = '';
+            tides.forEach(t => {
+                const d = new Date(t.time);
+                const timeStr = `${d.getHours().toString().padStart(2,'0')}:${d.getMinutes().toString().padStart(2,'0')}`;
+                const cssClass = t.type === '滿潮' ? 'tide-high' : 'tide-low';
+                const icon = t.type === '滿潮' ? '🌊' : '🔽';
+                htmlStr += `<span class="tide-item ${cssClass}">${icon} ${t.type} ${timeStr}</span>`;
+            });
+            return htmlStr || '無資料';
+        }
+
+        function resetUI() {
+            const grid = document.getElementById('forecast-grid');
+            grid.innerHTML = '';
+            chartInstances.forEach(chart => chart.destroy());
+            chartInstances = [];
+            document.getElementById('loading').style.display = 'block';
+            return grid;
+        }
+
+        async function fetchSpotData() {
+            document.getElementById('weekend-select').selectedIndex = 0;
+            const spotKey = document.getElementById('spot-select').value;
+            if(spotKey === 'none') return;
+            const spot = spots[spotKey];
+            const grid = resetUI();
+
+            const mapLink = document.getElementById('spot-map-link');
+            const mapFrame = document.getElementById('mini-map-frame');
+            const spotName = document.querySelector(`#spot-select option[value="${spotKey}"]`).innerText.split(' ').pop();
+            
+            mapLink.href = `https://www.google.com/maps/search/?api=1&query=${spot.lat},${spot.lon}`;
+            mapFrame.src = `https://maps.google.com/maps?q=${spot.lat},${spot.lon}&z=13&output=embed`;
+            document.getElementById('map-overlay-text').innerText = `📍 點擊開啟 ${spotName} 導航`;
+            mapLink.style.display = 'block'; 
+
+            try {
+                const urlMarineBest = `https://marine-api.open-meteo.com/v1/marine?latitude=${spot.lat}&longitude=${spot.lon}&hourly=wave_height,wave_period,wave_direction&timezone=Asia%2FTaipei&forecast_days=10`;
+                const urlWeather = `https://api.open-meteo.com/v1/forecast?latitude=${spot.lat}&longitude=${spot.lon}&hourly=windspeed_10m,winddirection_10m,weathercode&wind_speed_unit=ms&timezone=Asia%2FTaipei&forecast_days=10`;
+                
+                const [resBest, resWeather] = await Promise.all([ 
+                    fetch(urlMarineBest), 
+                    fetch(urlWeather) 
+                ]);
+                
+                if (!resBest.ok || !resWeather.ok) {
+                    throw new Error(`API 伺服器回應錯誤 (${resBest.status} / ${resWeather.status})`);
+                }
+
+                const dataBest = await resBest.json();
+                const dataWeather = await resWeather.json();
+
+                let dataGfs = null;
+                try {
+                    const urlMarineGfs = `https://marine-api.open-meteo.com/v1/marine?latitude=${spot.lat}&longitude=${spot.lon}&hourly=wave_height&models=gfs_wave&timezone=Asia%2FTaipei&forecast_days=10`;
+                    const resGfs = await fetch(urlMarineGfs);
+                    if (resGfs.ok) dataGfs = await resGfs.json();
+                } catch (e) {
+                    console.warn("GFS 輔助模型讀取失敗", e);
+                }
+                
+                document.getElementById('loading').style.display = 'none';
+
+                for (let i = 0; i < 10; i++) { 
+                    const startIndex = i * 24;
+                    if(!dataBest.hourly.time[startIndex]) break; 
+
+                    const dateStrRaw = dataBest.hourly.time[startIndex];
+                    const dateOnlyStr = dateStrRaw.substring(0, 10); 
+                    const dObj = new Date(dateStrRaw);
+                    const month = (dObj.getMonth() + 1).toString().padStart(2, '0');
+                    const day = dObj.getDate().toString().padStart(2, '0');
+                    const weekDays = ['日', '一', '二', '三', '四', '五', '六'];
+                    const titleDate = `${month}/${day} (${weekDays[dObj.getDay()]})`;
+
+                    const tidesArray = calculateTidesArray(dateOnlyStr, spot.tideOffset);
+
+                    const mergedData = [];
+                    const weatherStripData = []; 
+                    let maxWaveBest = 0, maxWind = 0, maxPeriod = 0;
+                    let majorWaveDir = 0, majorWindDir = 0;
+
+                    for(let h = 4; h <= 19; h++) {
+                        const idx = startIndex + h;
+                        if(dataBest.hourly.time[idx]) {
+                            const waveBest = dataBest.hourly.wave_height[idx];
+                            
+                            let waveGfs = null;
+                            const timeStr = dataBest.hourly.time[idx];
+                            if (dataGfs && dataGfs.hourly && dataGfs.hourly.time) {
+                                const gfsIdx = dataGfs.hourly.time.indexOf(timeStr);
+                                if (gfsIdx !== -1) waveGfs = dataGfs.hourly.wave_height[gfsIdx];
+                            }
+                            
+                            const wavePeriod = dataBest.hourly.wave_period[idx];
+                            const waveDir = dataBest.hourly.wave_direction[idx];
+                            
+                            const wind = dataWeather.hourly.windspeed_10m[idx];
+                            const windDir = dataWeather.hourly.winddirection_10m[idx];
+                            const weatherCode = dataWeather.hourly.weathercode[idx];
+                            const timestamp = new Date(timeStr).getTime();
+                            
+                            mergedData.push({ 
+                                type: 'hourly', time: timestamp, 
+                                waveBest, waveGfs, wavePeriod, waveDir, wind, windDir, weatherCode 
+                            });
+
+                            if (h % 2 === 0) {
+                                const hrStr = `${h.toString().padStart(2,'0')}:00`;
+                                const weatherInfo = getWeatherIcon(weatherCode);
+                                weatherStripData.push({ time: hrStr, ...weatherInfo });
+                            }
+
+                            if(waveBest > maxWaveBest) { maxWaveBest = waveBest; majorWaveDir = waveDir; }
+                            if(wind > maxWind) { maxWind = wind; majorWindDir = windDir; }
+                            if(wavePeriod > maxPeriod) maxPeriod = wavePeriod;
+                        }
+                    }
+
+                    tidesArray.forEach(t => {
+                        mergedData.push({ 
+                            type: t.type, time: t.time, 
+                            waveBest: null, waveGfs: null, wavePeriod: null, waveDir: null, wind: null, windDir: null, weatherCode: null 
+                        });
+                    });
+
+                    mergedData.sort((a, b) => a.time - b.time);
+
+                    const chartLabels = [];
+                    const chartWavesBest = [];
+                    const chartWavesGfs = [];
+                    const chartWinds = [];
+                    const metaData = []; 
+                    
+                    mergedData.forEach(item => {
+                        const d = new Date(item.time);
+                        const timeStr = `${d.getHours().toString().padStart(2,'0')}:${d.getMinutes().toString().padStart(2,'0')}`;
+                        
+                        if (item.type === 'hourly') {
+                            chartLabels.push(timeStr);
+                        } else {
+                            const prefix = item.type === '滿潮' ? '🌊滿' : '🔽乾';
+                            chartLabels.push(`${prefix} ${timeStr}`);
+                        }
+                        
+                        chartWavesBest.push(item.waveBest);
+                        chartWavesGfs.push(item.waveGfs);
+                        chartWinds.push(item.wind);
+                        metaData.push({ period: item.wavePeriod, waveDir: item.waveDir, windDir: item.windDir, weatherCode: item.weatherCode });
+                    });
+
+                    let weatherStripHTML = '';
+                    weatherStripData.forEach(w => {
+                        weatherStripHTML += `
+                            <div class="weather-slot">
+                                <span class="weather-time">${w.time}</span>
+                                <span class="weather-icon" title="${w.desc}">${w.icon}</span>
+                            </div>
+                        `;
+                    });
+
+                    const card = document.createElement('div');
+                    card.className = 'day-card';
+                    const canvasId = `chart-${i}`;
+                    
+                    let maxWindColor = 'var(--secondary)';
+                    if (maxWind >= 9) maxWindColor = 'var(--danger)'; 
+                    else if (maxWind >= 6) maxWindColor = 'var(--warning)'; 
+
+                    card.innerHTML = `
+                        <div class="date-title">📅 ${titleDate}</div>
+                        <div class="summary-grid">
+                            <div class="summary-item">綜合浪高 <strong class="wave-text">${maxWaveBest.toFixed(2)}m</strong></div>
+                            <div class="summary-item">最大風速 <strong style="color: ${maxWindColor};">${maxWind.toFixed(2)}m/s</strong></div>
+                            <div class="summary-item">最大週期 <strong class="period-text">${maxPeriod.toFixed(1)}s</strong></div>
+                            <div class="summary-item">主導浪向 <strong class="dir-text">${getDirectionArrow(majorWaveDir)} ${majorWaveDir}°</strong></div>
+                            <div class="summary-item">主導風向 <strong class="dir-text">${getDirectionArrow(majorWindDir)} ${majorWindDir}°</strong></div>
+                        </div>
+                        <div class="weather-strip">
+                            ${weatherStripHTML}
+                        </div>
+                        <div class="chart-container">
+                            <canvas id="${canvasId}"></canvas>
+                        </div>
+                    `;
+                    grid.appendChild(card);
+
+                    const ctx = document.getElementById(canvasId).getContext('2d');
+                    const gradient = ctx.createLinearGradient(0, 0, 0, 180);
+                    gradient.addColorStop(0, 'rgba(9, 132, 227, 0.3)');
+                    gradient.addColorStop(1, 'rgba(9, 132, 227, 0.0)');
+
+                    const newChart = new Chart(ctx, {
+                        type: 'line',
+                        data: {
+                            labels: chartLabels, 
+                            datasets: [
+                                {
+                                    label: '綜合預報 (m)', data: chartWavesBest, 
+                                    borderColor: '#0984e3', backgroundColor: gradient,
+                                    borderWidth: 3, pointRadius: 0, pointHitRadius: 10, fill: true, tension: 0.4, yAxisID: 'y',
+                                    spanGaps: true 
+                                },
+                                {
+                                    label: 'GFS 模型 (m)', data: chartWavesGfs, 
+                                    borderColor: '#9b59b6', 
+                                    borderWidth: 1.5, borderDash: [4, 4], pointRadius: 0, pointHitRadius: 10, fill: false, tension: 0.4, yAxisID: 'y',
+                                    spanGaps: true 
+                                },
+                                {
+                                    label: '風速 (m/s)', data: chartWinds, 
+                                    borderWidth: 2, borderDash: [2, 2], pointRadius: 0, pointHitRadius: 10, fill: false, tension: 0.4, yAxisID: 'y1',
+                                    spanGaps: true,
+                                    segment: {
+                                        borderColor: ctx => {
+                                            const val = Math.max(ctx.p0.parsed.y, ctx.p1.parsed.y);
+                                            if (val >= 9) return '#d63031'; 
+                                            if (val >= 6) return '#f39c12'; 
+                                            return '#00b894';               
+                                        }
+                                    }
+                                }
+                            ]
+                        },
+                        options: {
+                            responsive: true, maintainAspectRatio: false,
+                            plugins: { 
+                                legend: { display: false }, 
+                                tooltip: { 
+                                    mode: 'index', 
+                                    intersect: false,
+                                    callbacks: { 
+                                        label: function(context) { 
+                                            if(context.raw === null || context.raw === undefined) return null; 
+                                            if(context.datasetIndex === 0) return context.parsed.y.toFixed(2) + ' m (綜合浪高)';
+                                            if(context.datasetIndex === 1) return context.parsed.y.toFixed(2) + ' m (GFS 輔助)';
+                                            if(context.datasetIndex === 2) return context.parsed.y.toFixed(2) + ' m/s (風速)'; 
+                                        },
+                                        afterBody: function(context) {
+                                            const idx = context[0].dataIndex;
+                                            const meta = metaData[idx];
+                                            if(meta && meta.period !== null && meta.period !== undefined) {
+                                                const weather = getWeatherIcon(meta.weatherCode);
+                                                return `\n天氣: ${weather.icon} ${weather.desc} | 週期: ${meta.period.toFixed(1)}s\n浪向: ${getDirectionArrow(meta.waveDir)} | 風向: ${getDirectionArrow(meta.windDir)}`;
+                                            }
+                                        }
+                                    }
+                                } 
+                            },
+                            scales: {
+                                x: { 
+                                    grid: { display: false }, 
+                                    ticks: { 
+                                        autoSkip: false, maxRotation: 45, minRotation: 45,
+                                        callback: function(val, index) {
+                                            const label = this.getLabelForValue(val);
+                                            if (label.includes('滿') || label.includes('乾')) return label;
+                                            if (label.includes(':00')) {
+                                                const hour = parseInt(label.split(':')[0]);
+                                                if (hour % 2 === 0) return label;
+                                            }
+                                            return null; 
+                                        },
+                                        color: function(context) {
+                                            const label = context.tick.label || '';
+                                            if(label.includes('滿')) return '#0984e3'; 
+                                            if(label.includes('乾')) return '#636e72'; 
+                                            return '#b2bec3';
+                                        },
+                                        font: function(context) {
+                                            const label = context.tick.label || '';
+                                            if(label.includes('滿') || label.includes('乾')) {
+                                                return { weight: 'bold' };
+                                            }
+                                        }
+                                    } 
+                                },
+                                y: { 
+                                    type: 'linear', display: true, position: 'left', beginAtZero: true, suggestedMax: 2.0, 
+                                    grid: { color: '#f1f2f6' }, ticks: { color: '#0984e3' },
+                                    title: { display: true, text: '浪高 (m)', color: '#0984e3', font: { weight: 'bold', size: 12 } }
+                                },
+                                y1: { 
+                                    type: 'linear', display: true, position: 'right', beginAtZero: true, suggestedMax: 10, 
+                                    grid: { drawOnChartArea: false }, ticks: { color: '#636e72' },
+                                    title: { display: true, text: '風速 (m/s)', color: '#636e72', font: { weight: 'bold', size: 12 } }
+                                }
+                            }
+                        }
+                    });
+                    chartInstances.push(newChart);
+                }
+            } catch (error) {
+                console.error(error);
+                logError(error.message); // 將錯誤寫入左上角偵錯區
+                grid.innerHTML = `<div class="alert">網路連線發生錯誤。請確認網路狀態或 API 服務是否正常。</div>`;
+            }
+        }
+
+        async function fetchWeekendData() {
+            document.getElementById('spot-select').selectedIndex = 0;
+            const filterVal = document.getElementById('weekend-select').value;
+            if(filterVal === 'none') return;
+            
+            document.getElementById('spot-map-link').style.display = 'none';
+            
+            const grid = resetUI();
+
+            const spotKeys = Object.keys(spots);
+            const lats = spotKeys.map(k => spots[k].lat).join(',');
+            const lons = spotKeys.map(k => spots[k].lon).join(',');
+
+            try {
+                const url = `https://marine-api.open-meteo.com/v1/marine?latitude=${lats}&longitude=${lons}&hourly=wave_height&timezone=Asia%2FTaipei&forecast_days=10`;
+                const response = await fetch(url);
+                if (!response.ok) throw new Error("API 伺服器回應錯誤");
+                
+                const dataArray = await response.json();
+                document.getElementById('loading').style.display = 'none';
+
+                const timeArray = dataArray[0].hourly.time;
+                let targetSat = null, targetSun = null;
+
+                for(let i = 0; i < timeArray.length; i += 24) {
+                    if(!timeArray[i]) break;
+                    const dObj = new Date(timeArray[i]);
+                    if(dObj.getDay() === 6 && !targetSat) { 
+                        targetSat = timeArray[i].substring(0, 10); 
+                        const nextDay = new Date(dObj);
+                        nextDay.setDate(dObj.getDate() + 1);
+                        targetSun = `${nextDay.getFullYear()}-${String(nextDay.getMonth() + 1).padStart(2, '0')}-${String(nextDay.getDate()).padStart(2, '0')}`;
+                        break;
+                    }
+                }
+
+                let satIndices = [], sunIndices = [];
+                for(let i = 0; i < timeArray.length; i++) {
+                    const datePart = timeArray[i].substring(0, 10);
+                    const hr = parseInt(timeArray[i].substring(11, 13));
+                    if(hr >= 4 && hr <= 19) {
+                        if(datePart === targetSat) satIndices.push(i);
+                        if(datePart === targetSun) sunIndices.push(i);
+                    }
+                }
+
+                const matchingSpots = [];
+
+                dataArray.forEach((spotData, index) => {
+                    const spotKey = spotKeys[index];
+                    const spotObj = spots[spotKey];
+                    const spotName = document.querySelector(`#spot-select option[value="${spotKey}"]`).innerText.split(' ').pop(); 
+
+                    let satMax = 0, sunMax = 0;
+                    satIndices.forEach(idx => { if(spotData.hourly.wave_height[idx] > satMax) satMax = spotData.hourly.wave_height[idx]; });
+                    sunIndices.forEach(idx => { if(spotData.hourly.wave_height[idx] > sunMax) sunMax = spotData.hourly.wave_height[idx]; });
+
+                    let validDays = 0, sumMax = 0;
+                    if (satIndices.length > 0) { sumMax += satMax; validDays++; }
+                    if (sunIndices.length > 0) { sumMax += sunMax; validDays++; }
+                    if (validDays === 0) return;
+                    
+                    const avgMax = sumMax / validDays;
+                    let matches = false;
+                    if(filterVal === '0.5-1.0' && avgMax >= 0.5 && avgMax < 1.0) matches = true;
+                    if(filterVal === '1.0-1.5' && avgMax >= 1.0 && avgMax <= 1.5) matches = true;
+
+                    if (matches) {
+                        matchingSpots.push({
+                            name: spotName,
+                            satMax: satIndices.length > 0 ? satMax.toFixed(2) : '-',
+                            sunMax: sunIndices.length > 0 ? sunMax.toFixed(2) : '-',
+                            tideSatHTML: getTidesHTMLString(targetSat, spotObj.tideOffset),
+                            tideSunHTML: getTidesHTMLString(targetSun, spotObj.tideOffset)
+                        });
+                    }
+                });
+
+                if(matchingSpots.length === 0) {
+                    grid.innerHTML = '<div class="alert">本週末沒有平均浪高落在此區間的浪點。</div>';
+                } else {
+                    matchingSpots.forEach(spot => {
+                        const card = document.createElement('div');
+                        card.className = 'day-card weekend-card';
+                        card.innerHTML = `
+                            <div class="date-title">📍 ${spot.name}</div>
+                            <div class="tide-box" style="font-size: 0.8rem; margin-top: 5px;">
+                                <div style="color:#2d3436; margin-bottom:4px;">週六潮汐：</div>
+                                ${spot.tideSatHTML}
+                                <div style="color:#2d3436; margin:8px 0 4px 0;">週日潮汐：</div>
+                                ${spot.tideSunHTML}
+                            </div>
+                            <div class="summary-box">
+                                <div class="summary-item">週六最大浪<strong>${spot.satMax} m</strong></div>
+                                <div class="summary-item">週日最大浪<strong>${spot.sunMax} m</strong></div>
+                            </div>
+                        `;
+                        grid.appendChild(card);
+                    });
+                }
+            } catch (error) {
+                console.error(error);
+                logError(error.message); // 將錯誤寫入左上角偵錯區
+                grid.innerHTML = `<div class="alert">取得資料失敗，請稍後再試。</div>`;
+            }
+        }
+
+        window.onload = fetchSpotData;
+    </script>
+</body>
+</html>
