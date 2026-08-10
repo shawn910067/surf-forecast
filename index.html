@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>真實數據版：台灣全區 10 天浪點預報 (手機三欄強效版)</title>
+    <title>真實數據版：台灣全區 10 天浪點預報 (完整資訊無簡化版)</title>
     
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
@@ -24,7 +24,7 @@
             background-color: var(--bg-color);
             color: var(--text-main);
             margin: 0;
-            padding: 10px;
+            padding: 15px;
         }
         
         .version-badge {
@@ -32,10 +32,10 @@
             top: 10px;
             left: 10px;
             background: rgba(255, 255, 255, 0.95);
-            padding: 6px 10px;
+            padding: 8px 12px;
             border-radius: 6px;
             box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-            font-size: 0.7rem;
+            font-size: 0.75rem;
             color: #636e72;
             z-index: 1000;
             border-left: 3px solid var(--primary);
@@ -47,11 +47,11 @@
 
         .top-dashboard {
             display: grid;
-            grid-template-columns: 350px 1fr 350px; 
+            grid-template-columns: 440px 1fr 440px; 
             align-items: center;
             max-width: 1600px;
-            margin: 0 auto 20px auto;
-            gap: 15px;
+            margin: 0 auto 30px auto;
+            gap: 20px;
         }
 
         .dashboard-center {
@@ -62,29 +62,29 @@
             grid-column: 2; 
         }
 
-        header { text-align: center; margin-bottom: 10px; }
-        h1 { color: var(--primary); margin-bottom: 5px; font-size: 1.5rem; }
-        .subtitle { color: #636e72; margin-bottom: 8px; font-size: 0.85rem; }
+        header { text-align: center; margin-bottom: 15px; }
+        h1 { color: var(--primary); margin-bottom: 8px; font-size: 1.8rem; }
+        .subtitle { color: #636e72; margin-bottom: 10px; font-size: 0.95rem; }
         .legend-badge {
-            display: inline-block; font-size: 0.75rem; padding: 2px 6px;
+            display: inline-block; font-size: 0.8rem; padding: 4px 8px;
             border-radius: 12px; margin: 2px; color: white; font-weight: bold;
         }
         .bg-green { background-color: var(--secondary); }
         .bg-yellow { background-color: var(--warning); }
         .bg-red { background-color: var(--danger); }
         .bg-purple { background-color: var(--model-alt); }
-        .legend-container { margin-bottom: 10px; text-align: center;}
+        .legend-container { margin-bottom: 15px; text-align: center;}
         
         .dropdown-group {
             display: flex;
-            gap: 10px;
+            gap: 15px;
             flex-wrap: wrap;
             justify-content: center;
         }
         
         select {
-            padding: 10px 12px; font-size: 0.9rem; border: 2px solid var(--primary); 
-            border-radius: 8px; min-width: 240px; background-color: white; height: 42px;
+            padding: 12px 15px; font-size: 1rem; border: 2px solid var(--primary); 
+            border-radius: 8px; min-width: 280px; background-color: white; height: 50px;
             cursor: pointer; outline: none; box-shadow: 0 4px 6px rgba(9, 132, 227, 0.1); transition: all 0.3s;
         }
         select:focus { border-color: var(--primary-dark); }
@@ -98,8 +98,8 @@
 
         .mini-map-container {
             position: relative;
-            width: 350px; 
-            height: 160px;
+            width: 440px; 
+            height: 200px;
             border-radius: 8px;
             overflow: hidden;
             box-shadow: 0 4px 6px rgba(9, 132, 227, 0.15);
@@ -126,95 +126,99 @@
             background: rgba(41, 128, 185, 0.9); 
             color: white;
             text-align: center;
-            font-size: 0.85rem;
+            font-size: 0.95rem;
             font-weight: bold;
-            padding: 6px 0;
+            padding: 8px 0;
             z-index: 10;
         }
 
-        /* === 強制手機上一排顯示三個（將 minmax 縮小至 110px） === */
+        /* 確保卡片有足夠空間完整顯示所有文字標題與數值 */
         .forecast-container {
             display: grid; 
-            grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); 
-            gap: 8px; 
+            grid-template-columns: repeat(auto-fit, minmax(420px, 1fr)); 
+            gap: 20px; 
             max-width: 1600px; 
             margin: 0 auto;
         }
         .day-card {
-            background: var(--card-bg); border-radius: 8px; padding: 6px;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.05); border-top: 3px solid var(--primary);
-            display: flex; flex-direction: column;
+            background: var(--card-bg); border-radius: 12px; padding: 15px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.05); border-top: 5px solid var(--primary);
+            display: flex; flex-direction: column; transition: transform 0.2s;
         }
+        .day-card:hover { transform: translateY(-3px); }
         .weekend-card { border-top-color: var(--secondary); }
         
-        .date-title { font-weight: bold; font-size: 0.8rem; text-align: center; margin-bottom: 6px; border-bottom: 1px solid var(--border-color); padding-bottom: 4px; }
+        .date-title { font-weight: bold; font-size: 1.1rem; text-align: center; margin-bottom: 15px; border-bottom: 1px solid var(--border-color); padding-bottom: 10px; }
         
+        /* 完整不簡化的摘要欄位 */
         .summary-grid { 
-            display: flex; flex-direction: column; gap: 2px;
-            margin-bottom: 6px; font-size: 0.6rem; color: #636e72; text-align: center; 
+            display: flex; justify-content: space-between; gap: 6px;
+            margin-bottom: 15px; font-size: 0.75rem; color: #636e72; text-align: center; 
         }
         .summary-item { 
-            background: #f8f9fa; padding: 3px 2px; border-radius: 4px; border: 1px solid #f1f2f6;
+            background: #f8f9fa; padding: 8px 2px; border-radius: 8px; border: 1px solid #f1f2f6;
+            flex: 1; min-width: 0; 
         }
-        .summary-item strong { display: inline; font-size: 0.7rem; }
+        .summary-item strong { display: block; font-size: 1rem; margin-top: 4px; }
         .wave-text { color: var(--primary); }
         .period-text { color: #8e44ad; }
-        .dir-text { color: #2c3e50; font-size: 0.65rem !important; }
+        .dir-text { color: #2c3e50; font-size: 0.95rem !important; }
 
+        /* 天氣預報列保持完整資訊 */
         .weather-strip {
             display: flex;
             justify-content: space-around;
             background: #f1f8ff;
             border: 1px solid #d0e1fd;
-            border-radius: 4px;
-            padding: 2px;
-            margin-bottom: 6px;
-            font-size: 0.6rem;
+            border-radius: 8px;
+            padding: 6px 4px;
+            margin-bottom: 15px;
+            font-size: 0.75rem;
             text-align: center;
-            overflow-x: auto;
         }
         .weather-slot {
             display: flex;
             flex-direction: column;
             align-items: center;
+            gap: 2px;
             flex: 1;
         }
-        .weather-time { display: none; } /* 手機空間極小，隱藏時間文字僅留圖示 */
-        .weather-icon { font-size: 0.75rem; }
+        .weather-time { color: #636e72; font-size: 0.65rem; }
+        .weather-icon { font-size: 1rem; }
         
-        .chart-container { position: relative; height: 160px; width: 100%; margin-top: auto; }
+        .chart-container { position: relative; height: 280px; width: 100%; margin-top: auto; }
         .alert { grid-column: 1 / -1; background-color: #ffeaa7; color: #d63031; padding: 15px; border-radius: 8px; text-align: center; font-size: 1.1rem; }
         #loading { text-align: center; color: var(--primary); font-weight: bold; display: none; margin-bottom: 20px;}
         
         .tide-box {
             background-color: #f8f9fa; border-radius: 8px; padding: 10px;
-            margin-bottom: 15px; text-align: center; font-size: 0.85rem;
+            margin-bottom: 15px; text-align: center; font-size: 0.9rem;
             color: var(--primary-dark); border: 1px solid var(--border-color);
         }
-        .tide-item { display: inline-block; margin: 0 4px; padding: 2px 4px; }
+        .tide-item { display: inline-block; margin: 0 5px; padding: 2px 5px; }
         .tide-high { font-weight: bold; color: var(--primary); }
         .tide-low { color: #636e72; }
 
-        /* 📱 手機版版面結構微調 */
-        @media (max-width: 768px) {
+        @media (max-width: 900px) {
             .top-dashboard {
                 display: flex;
                 flex-direction: column;
                 align-items: center;
-                gap: 10px;
+                gap: 15px;
             }
             .top-dashboard > div:first-child { display: none; }
             .dashboard-center, .dashboard-right { width: 100%; }
             .dropdown-group { width: 100%; flex-direction: column; align-items: stretch; }
             select { width: 100%; min-width: 0; }
-            .mini-map-container { width: 100%; max-width: 100%; height: 150px; }
+            .mini-map-container { width: 100%; max-width: 100%; height: 180px; }
         }
     </style>
 </head>
 <body>
 
     <div class="version-badge">
-        <div>📦 v1.23 (手機三欄強效版)</div>
+        <div>📦 <strong>Version:</strong> v1.24 (完整無簡化版)</div>
+        <div>🕒 <strong>完成時間:</strong> 2026-08-05 19:05</div>
     </div>
 
     <div class="top-dashboard">
@@ -228,7 +232,7 @@
                     <span class="legend-badge bg-green">風速 < 6</span>
                     <span class="legend-badge bg-yellow">風速 6~9</span>
                     <span class="legend-badge bg-red">風速 > 9</span>
-                    <span class="legend-badge bg-purple" style="margin-left: 10px; border-radius: 4px;">GFS 輔助模型</span>
+                    <span class="legend-badge bg-purple" style="margin-left: 15px; border-radius: 4px;">GFS 輔助模型</span>
                 </div>
             </header>
 
@@ -522,6 +526,7 @@
                     weatherStripData.forEach(w => {
                         weatherStripHTML += `
                             <div class="weather-slot">
+                                <span class="weather-time">${w.time}</span>
                                 <span class="weather-icon" title="${w.desc}">${w.icon}</span>
                             </div>
                         `;
@@ -535,14 +540,15 @@
                     if (maxWind >= 9) maxWindColor = 'var(--danger)'; 
                     else if (maxWind >= 6) maxWindColor = 'var(--warning)'; 
 
+                    // 確保卡片頂端摘要文字完整保留，絕不簡化
                     card.innerHTML = `
                         <div class="date-title">📅 ${titleDate}</div>
                         <div class="summary-grid">
-                            <div class="summary-item">浪: <strong class="wave-text">${maxWaveBest.toFixed(2)}m</strong></div>
-                            <div class="summary-item">風: <strong style="color: ${maxWindColor};">${maxWind.toFixed(2)}m/s</strong></div>
-                            <div class="summary-item">週期: <strong class="period-text">${maxPeriod.toFixed(1)}s</strong></div>
-                            <div class="summary-item">浪向: <strong class="dir-text">${getDirectionArrow(majorWaveDir)} ${majorWaveDir}°</strong></div>
-                            <div class="summary-item">風向: <strong class="dir-text">${getDirectionArrow(majorWindDir)} ${majorWindDir}°</strong></div>
+                            <div class="summary-item">綜合浪高 <strong class="wave-text">${maxWaveBest.toFixed(2)}m</strong></div>
+                            <div class="summary-item">最大風速 <strong style="color: ${maxWindColor};">${maxWind.toFixed(2)}m/s</strong></div>
+                            <div class="summary-item">最大週期 <strong class="period-text">${maxPeriod.toFixed(1)}s</strong></div>
+                            <div class="summary-item">主導浪向 <strong class="dir-text">${getDirectionArrow(majorWaveDir)} ${majorWaveDir}°</strong></div>
+                            <div class="summary-item">主導風向 <strong class="dir-text">${getDirectionArrow(majorWindDir)} ${majorWindDir}°</strong></div>
                         </div>
                         <div class="weather-strip">
                             ${weatherStripHTML}
@@ -554,7 +560,7 @@
                     grid.appendChild(card);
 
                     const ctx = document.getElementById(canvasId).getContext('2d');
-                    const gradient = ctx.createLinearGradient(0, 0, 0, 140);
+                    const gradient = ctx.createLinearGradient(0, 0, 0, 180);
                     gradient.addColorStop(0, 'rgba(9, 132, 227, 0.3)');
                     gradient.addColorStop(1, 'rgba(9, 132, 227, 0.0)');
 
@@ -566,18 +572,18 @@
                                 {
                                     label: '綜合預報 (m)', data: chartWavesBest, 
                                     borderColor: '#0984e3', backgroundColor: gradient,
-                                    borderWidth: 2, pointRadius: 0, pointHitRadius: 5, fill: true, tension: 0.4, yAxisID: 'y',
+                                    borderWidth: 3, pointRadius: 0, pointHitRadius: 10, fill: true, tension: 0.4, yAxisID: 'y',
                                     spanGaps: true 
                                 },
                                 {
                                     label: 'GFS 模型 (m)', data: chartWavesGfs, 
                                     borderColor: '#9b59b6', 
-                                    borderWidth: 1, borderDash: [3, 3], pointRadius: 0, pointHitRadius: 5, fill: false, tension: 0.4, yAxisID: 'y',
+                                    borderWidth: 1.5, borderDash: [4, 4], pointRadius: 0, pointHitRadius: 10, fill: false, tension: 0.4, yAxisID: 'y',
                                     spanGaps: true 
                                 },
                                 {
                                     label: '風速 (m/s)', data: chartWinds, 
-                                    borderWidth: 1.5, borderDash: [2, 2], pointRadius: 0, pointHitRadius: 5, fill: false, tension: 0.4, yAxisID: 'y1',
+                                    borderWidth: 2, borderDash: [2, 2], pointRadius: 0, pointHitRadius: 10, fill: false, tension: 0.4, yAxisID: 'y1',
                                     spanGaps: true,
                                     segment: {
                                         borderColor: ctx => {
@@ -620,13 +626,12 @@
                                     grid: { display: false }, 
                                     ticks: { 
                                         autoSkip: false, maxRotation: 45, minRotation: 45,
-                                        font: { size: 8 },
                                         callback: function(val, index) {
                                             const label = this.getLabelForValue(val);
                                             if (label.includes('滿') || label.includes('乾')) return label;
                                             if (label.includes(':00')) {
                                                 const hour = parseInt(label.split(':')[0]);
-                                                if (hour % 4 === 0) return label; // 手機上每 4 小時顯示一個時間軸標籤避免過擠
+                                                if (hour % 2 === 0) return label;
                                             }
                                             return null; 
                                         },
@@ -635,18 +640,24 @@
                                             if(label.includes('滿')) return '#0984e3'; 
                                             if(label.includes('乾')) return '#636e72'; 
                                             return '#b2bec3';
+                                        },
+                                        font: function(context) {
+                                            const label = context.tick.label || '';
+                                            if(label.includes('滿') || label.includes('乾')) {
+                                                return { weight: 'bold' };
+                                            }
                                         }
                                     } 
                                 },
                                 y: { 
                                     type: 'linear', display: true, position: 'left', beginAtZero: true, suggestedMax: 2.0, 
-                                    grid: { color: '#f1f2f6' }, ticks: { font: { size: 8 }, color: '#0984e3' },
-                                    title: { display: false }
+                                    grid: { color: '#f1f2f6' }, ticks: { color: '#0984e3' },
+                                    title: { display: true, text: '浪高 (m)', color: '#0984e3', font: { weight: 'bold', size: 12 } }
                                 },
                                 y1: { 
                                     type: 'linear', display: true, position: 'right', beginAtZero: true, suggestedMax: 10, 
-                                    grid: { drawOnChartArea: false }, ticks: { font: { size: 8 }, color: '#636e72' },
-                                    title: { display: false }
+                                    grid: { drawOnChartArea: false }, ticks: { color: '#636e72' },
+                                    title: { display: true, text: '風速 (m/s)', color: '#636e72', font: { weight: 'bold', size: 12 } }
                                 }
                             }
                         }
