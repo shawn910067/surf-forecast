@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>真實數據版：台灣全區 10 天浪點預報 (週末浪高圖星期標示版)</title>
+    <title>真實數據版：台灣全區 10 天浪點預報</title>
     
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
@@ -221,8 +221,7 @@
 <body>
 
     <div class="version-badge">
-        <div>📦 <strong>Version:</strong> v1.27 (浪高圖星期標示版)</div>
-        <div>🕒 <strong>完成時間:</strong> 2026-08-05 19:35</div>
+        <div>📦 <strong>Version:</strong> v1.28</div>
     </div>
 
     <div class="top-dashboard">
@@ -779,7 +778,6 @@
                         `;
                         grid.appendChild(card);
 
-                        // 渲染週末卡片的一週浪高趨勢小圖表 (X軸標示日期與星期)
                         const ctx = document.getElementById(canvasId).getContext('2d');
                         const labels = spot.waveTimes.map(t => {
                             const d = new Date(t);
@@ -815,7 +813,6 @@
                                             font: { size: 8 },
                                             callback: function(val, index) {
                                                 const label = this.getLabelForValue(val);
-                                                // 每天 08:00 顯示一次「日期(星期)」標籤
                                                 if (label.includes('08:00')) return label.split(' ')[0];
                                                 return null;
                                             }
