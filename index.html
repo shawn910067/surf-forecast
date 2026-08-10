@@ -3,15 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>真實數據版：台灣全區 10 天浪點預報 (天氣圖示版)</title>
+    <title>真實數據版：台灣全區 10 天浪點預報 (iPhone RWD 自適應版)</title>
     
-    <!-- PWA / iOS 專屬支援設定 -->
-    <link rel="manifest" href="manifest.json">
-    <meta name="apple-mobile-web-app-capable" content="yes">
-    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    <meta name="apple-mobile-web-app-title" content="台灣浪點預報">
-    <link rel="apple-touch-icon" href="icon-192.png">
-
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
         :root {
@@ -32,14 +25,13 @@
             color: var(--text-main);
             margin: 0;
             padding: 20px;
-            padding-top: env(safe-area-inset-top, 20px);
         }
         
         .version-badge {
             position: fixed;
             top: 15px;
             left: 15px;
-            background: rgba(255, 255, 255, 0.95);
+            background: rgba(255, 255, 255, 0.9);
             padding: 10px 14px;
             border-radius: 8px;
             box-shadow: 0 4px 6px rgba(0,0,0,0.08);
@@ -49,12 +41,12 @@
             border-left: 4px solid var(--primary);
             line-height: 1.4;
             backdrop-filter: blur(5px);
-            max-width: 280px;
         }
         .version-badge strong { color: var(--text-main); }
         .source-link { color: var(--primary); text-decoration: none; }
         .source-link:hover { text-decoration: underline; }
 
+        /* 電腦版維持精準對稱 Grid */
         .top-dashboard {
             display: grid;
             grid-template-columns: 440px 1fr 440px; 
@@ -143,7 +135,7 @@
         }
 
         .forecast-container {
-            display: grid; grid-template-columns: repeat(auto-fit, minmax(450px, 1fr)); 
+            display: grid; grid-template-columns: repeat(auto-fit, minmax(420px, 1fr)); 
             gap: 20px; max-width: 1500px; margin: 0 auto;
         }
         .day-card {
@@ -157,17 +149,17 @@
         .date-title { font-weight: bold; font-size: 1.1rem; text-align: center; margin-bottom: 15px; border-bottom: 1px solid var(--border-color); padding-bottom:10px; }
         
         .summary-grid { 
-            display: flex; justify-content: space-between; gap: 6px;
+            display: flex; justify-content: space-between; gap: 4px;
             margin-bottom: 12px; font-size: 0.75rem; color: #636e72; text-align: center; 
         }
         .summary-item { 
-            background: #f8f9fa; padding: 8px 2px; border-radius: 8px; border: 1px solid #f1f2f6;
+            background: #f8f9fa; padding: 6px 2px; border-radius: 8px; border: 1px solid #f1f2f6;
             flex: 1; min-width: 0; 
         }
-        .summary-item strong { display: block; font-size: 1rem; margin-top: 4px; }
+        .summary-item strong { display: block; font-size: 0.9rem; margin-top: 4px; }
         .wave-text { color: var(--primary); }
         .period-text { color: #8e44ad; }
-        .dir-text { color: #2c3e50; font-size: 0.95rem !important; }
+        .dir-text { color: #2c3e50; font-size: 0.85rem !important; }
 
         .weather-strip {
             display: flex;
@@ -202,15 +194,39 @@
         .tide-item { display: inline-block; margin: 0 5px; padding: 2px 5px; }
         .tide-high { font-weight: bold; color: var(--primary); }
         .tide-low { color: #636e72; }
+
+        /* === 📱 iPhone / 手機版響應式優化 (RWD Media Query) === */
+        @media (max-width: 900px) {
+            body { padding: 10px; }
+            .version-badge { display: none; } /* 手機上隱藏版本浮動標籤避免佔畫面 */
+            
+            /* 將頂部儀表板改為單欄上下堆疊 */
+            .top-dashboard {
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+                gap: 15px;
+            }
+            .top-dashboard > div:first-child { display: none; } /* 隱藏電腦版左側平衡佔位 */
+            
+            .dashboard-center { width: 100%; }
+            .dashboard-right { width: 100%; justify-content: center; }
+            
+            /* 下拉選單與地圖改為 100% 寬度以適應手機螢幕 */
+            .dropdown-group { width: 100%; flex-direction: column; align-items: stretch; }
+            select { width: 100%; min-width: 0; }
+            .mini-map-container { width: 100%; max-width: 440px; height: 180px; }
+            
+            /* 圖表卡片改為單欄佔滿 */
+            .forecast-container { grid-template-columns: 1fr; }
+        }
     </style>
 </head>
 <body>
 
-    <!-- 左上角版本與即時偵錯狀態列 -->
     <div class="version-badge">
-        <div>📦 <strong>Version:</strong> v1.22 (iOS 偵錯版)</div>
-        <div>🕒 <strong>狀態:</strong> <span id="status-text" style="color:var(--secondary);">就緒</span></div>
-        <div id="error-log" style="margin-top: 4px; padding-top: 4px; border-top: 1px solid #dfe6e9; color: var(--danger); font-size: 0.7rem; display: none;"></div>
+        <div>📦 <strong>Version:</strong> v1.21 (iPhone RWD 自適應版)</div>
+        <div>🕒 <strong>完成時間:</strong> 2026-08-05 18:40</div>
         <div style="margin-top: 4px; border-top: 1px solid #dfe6e9; padding-top: 4px;">
             🌊 模型: <a href="https://open-meteo.com/" target="_blank" class="source-link">Best Match & GFS</a><br>
             💨 風速: <a href="https://api.open-meteo.com/" target="_blank" class="source-link">Weather API</a>
@@ -228,7 +244,7 @@
                     <span class="legend-badge bg-green">風速 < 6</span>
                     <span class="legend-badge bg-yellow">風速 6~9</span>
                     <span class="legend-badge bg-red">風速 > 9</span>
-                    <span class="legend-badge bg-purple" style="margin-left: 15px; border-radius: 4px;">GFS 輔助模型</span>
+                    <span class="legend-badge bg-purple" style="margin-left: 10px; border-radius: 4px;">GFS 輔助模型</span>
                 </div>
             </header>
 
@@ -292,23 +308,6 @@
     <div class="forecast-container" id="forecast-grid"></div>
 
     <script>
-        // 偵錯輔助函式：將錯誤直接顯示在左上角介面上
-        function logError(msg) {
-            const log = document.getElementById('error-log');
-            const status = document.getElementById('status-text');
-            log.style.display = 'block';
-            log.innerHTML += `<div>⚠️ ${msg}</div>`;
-            status.innerText = "讀取異常";
-            status.style.color = "var(--danger)";
-            console.error(msg);
-        }
-
-        // 全域錯誤捕捉
-        window.onerror = function(message, source, lineno, colno, error) {
-            logError(`${message} (行: ${lineno})`);
-            return true;
-        };
-
         let chartInstances = [];
 
         const spots = {
@@ -430,7 +429,7 @@
                 ]);
                 
                 if (!resBest.ok || !resWeather.ok) {
-                    throw new Error(`API 伺服器回應錯誤 (${resBest.status} / ${resWeather.status})`);
+                    throw new Error("主要 API 伺服器回應錯誤");
                 }
 
                 const dataBest = await resBest.json();
@@ -678,7 +677,6 @@
                 }
             } catch (error) {
                 console.error(error);
-                logError(error.message); // 將錯誤寫入左上角偵錯區
                 grid.innerHTML = `<div class="alert">網路連線發生錯誤。請確認網路狀態或 API 服務是否正常。</div>`;
             }
         }
@@ -785,7 +783,6 @@
                 }
             } catch (error) {
                 console.error(error);
-                logError(error.message); // 將錯誤寫入左上角偵錯區
                 grid.innerHTML = `<div class="alert">取得資料失敗，請稍後再試。</div>`;
             }
         }
