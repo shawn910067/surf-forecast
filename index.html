@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>台灣全區 10 天浪點預報 </title>
+    <title>台灣全區 10 天浪點預報</title>
     
     <!-- Google tag (gtag.js) - Google Analytics -->
     <script async src="https://www.googletagmanager.com/gtag/js?id=G-JMY7S2W46D"></script>
@@ -231,7 +231,7 @@
 <body>
 
     <div class="version-badge">
-        <div>📦 <strong>Version:</strong> v1.29 </div>
+        <div>📦 <strong>Version:</strong> v1.36</div>
     </div>
 
     <div class="top-dashboard">
@@ -697,10 +697,16 @@
 
             try {
                 const url = `https://marine-api.open-meteo.com/v1/marine?latitude=${lats}&longitude=${lons}&hourly=wave_height&timezone=Asia%2FTaipei&forecast_days=10`;
-                const response = await fetch(url);
-                if (!response.ok) throw new Error("API 伺服器回應錯誤");
+                const urlWeather = `https://api.open-meteo.com/v1/forecast?latitude=${lats}&longitude=${lons}&hourly=windspeed_10m&wind_speed_unit=ms&timezone=Asia%2FTaipei&forecast_days=10`;
+
+                const [response, resWeather] = await Promise.all([
+                    fetch(url),
+                    fetch(urlWeather)
+                ]);
+                if (!response.ok || !resWeather.ok) throw new Error("API 伺服器回應錯誤");
                 
                 const dataArray = await response.json();
+                const weatherArray = await resWeather.json();
                 document.getElementById('loading').style.display = 'none';
 
                 const timeArray = dataArray[0].hourly.time;
@@ -736,9 +742,25 @@
                     if(!optionEl) return;
                     const spotName = optionEl.innerText.split(' ').pop(); 
 
+                    let satWave = [], sunWave = [];
                     let satMax = 0, sunMax = 0;
-                    satIndices.forEach(idx => { if(spotData.hourly.wave_height[idx] > satMax) satMax = spotData.hourly.wave_height[idx]; });
-                    sunIndices.forEach(idx => { if(spotData.hourly.wave_height[idx] > sunMax) sunMax = spotData.hourly.wave_height[idx]; });
+
+                    satIndices.forEach(idx => { 
+                        const val = spotData.hourly.wave_height[idx];
+                        satWave.push(val); 
+                        if(val > satMax) satMax = val;
+                    });
+                    sunIndices.forEach(idx => { 
+                        const val = spotData.hourly.wave_height[idx];
+                        sunWave.push(val); 
+                        if(val > sunMax) sunMax = val;
+                    });
+
+                    const getRange = (arr) => {
+                        const vals = arr.filter(v => v !== null);
+                        if(vals.length === 0) return '-';
+                        return `[${Math.min(...vals).toFixed(1)}~${Math.max(...vals).toFixed(1)}]`;
+                    };
 
                     let validDays = 0, sumMax = 0;
                     if (satIndices.length > 0) { sumMax += satMax; validDays++; }
@@ -754,10 +776,11 @@
                         matchingSpots.push({
                             spotKey: spotKey,
                             name: spotName,
-                            satMax: satIndices.length > 0 ? satMax.toFixed(2) : '-',
-                            sunMax: sunIndices.length > 0 ? sunMax.toFixed(2) : '-',
+                            satRange: getRange(satWave),
+                            sunRange: getRange(sunWave),
                             waveTimes: spotData.hourly.time,
-                            waveValues: spotData.hourly.wave_height
+                            waveValues: spotData.hourly.wave_height,
+                            windValues: weatherArray[index].hourly.windspeed_10m
                         });
                     }
                 });
@@ -782,8 +805,8 @@
                                 <canvas id="${canvasId}"></canvas>
                             </div>
                             <div class="summary-box" style="display:flex; justify-content:space-around; font-size:0.9rem; color:#636e72; text-align:center;">
-                                <div class="summary-item">週六最大浪<strong>${spot.satMax} m</strong></div>
-                                <div class="summary-item">週日最大浪<strong>${spot.sunMax} m</strong></div>
+                                <div class="summary-item">週六浪<strong>${spot.satRange}m</strong></div>
+                                <div class="summary-item">週日浪<strong>${spot.sunRange}m</strong></div>
                             </div>
                         `;
                         grid.appendChild(card);
@@ -810,13 +833,24 @@
                                     borderWidth: 2,
                                     pointRadius: 0,
                                     fill: true,
-                                    tension: 0.4
+                                    tension: 0.4,
+                                    yAxisID: 'y'
+                                }, {
+                                    label: '風速 (m/s)',
+                                    data: spot.windValues,
+                                    borderColor: '#00b894',
+                                    borderWidth: 1.5,
+                                    borderDash: [3, 3],
+                                    pointRadius: 0,
+                                    fill: false,
+                                    tension: 0.4,
+                                    yAxisID: 'y1'
                                 }]
                             },
                             options: {
                                 responsive: true,
                                 maintainAspectRatio: false,
-                                plugins: { legend: { display: false } },
+                                plugins: { legend: { display: true, labels: { font: { size: 8 } } } },
                                 scales: {
                                     x: {
                                         ticks: {
@@ -830,9 +864,23 @@
                                         grid: { display: false }
                                     },
                                     y: {
+                                        type: 'linear',
+                                        display: true,
+                                        position: 'left',
                                         beginAtZero: true,
                                         suggestedMax: 2.0,
-                                        ticks: { font: { size: 8 } }
+                                        ticks: { font: { size: 8 }, color: '#0984e3' },
+                                        title: { display: false }
+                                    },
+                                    y1: {
+                                        type: 'linear',
+                                        display: true,
+                                        position: 'right',
+                                        beginAtZero: true,
+                                        suggestedMax: 10,
+                                        grid: { drawOnChartArea: false },
+                                        ticks: { font: { size: 8 }, color: '#00b894' },
+                                        title: { display: false }
                                     }
                                 }
                             }
