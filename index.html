@@ -83,6 +83,7 @@
         .bg-yellow { background-color: var(--warning); }
         .bg-red { background-color: var(--danger); }
         .bg-purple { background-color: var(--model-alt); }
+        .bg-orange { background-color: #f39c12; }
         .legend-container { margin-bottom: 15px; text-align: center;}
         
         .dropdown-group {
@@ -231,7 +232,7 @@
 <body>
 
     <div class="version-badge">
-        <div>📦 <strong>Version:</strong> v1.36</div>
+        <div>📦 <strong>Version:</strong> v1.44 (能量曲線修復版)</div>
     </div>
 
     <div class="top-dashboard">
@@ -240,12 +241,13 @@
         <div class="dashboard-center">
             <header>
                 <h1>📡 台灣全區浪點預報</h1>
-                <div class="subtitle">浪高, 風速, 週期與方向全視角整合</div>
+                <div class="subtitle">浪高, 風速, 週期, 能量與方向全視角整合</div>
                 <div class="legend-container">
                     <span class="legend-badge bg-green">風速 &lt; 6</span>
                     <span class="legend-badge bg-yellow">風速 6~9</span>
                     <span class="legend-badge bg-red">風速 &gt; 9</span>
-                    <span class="legend-badge bg-purple" style="margin-left: 15px; border-radius: 4px;">GFS 輔助模型</span>
+                    <span class="legend-badge bg-orange" style="margin-left: 10px; border-radius: 4px;">能量指數</span>
+                    <span class="legend-badge bg-purple" id="legend-gfs" style="border-radius: 4px; display: none;">GFS 輔助模型</span>
                 </div>
             </header>
 
@@ -305,7 +307,7 @@
         </div>
     </div>
 
-    <div id="loading">📡 正在從多國氣象中心抓取模型資料...</div>
+    <div id="loading">📡 正在透過多重氣象模型抓取深度資料...</div>
     <div class="forecast-container" id="forecast-grid"></div>
 
     <script>
@@ -436,16 +438,19 @@
                 const dataBest = await resBest.json();
                 const dataWeather = await resWeather.json();
 
+                // 透過 Open-Meteo 取得 GFS 輔助數據，不怕跨網域阻擋
                 let dataGfs = null;
                 try {
-                    const urlMarineGfs = `https://marine-api.open-meteo.com/v1/marine?latitude=${spot.lat}&longitude=${spot.lon}&hourly=wave_height&models=gfs_wave&timezone=Asia%2FTaipei&forecast_days=10`;
-                    const resGfs = await fetch(urlMarineGfs);
+                    const resGfs = await fetch(`https://marine-api.open-meteo.com/v1/marine?latitude=${spot.lat}&longitude=${spot.lon}&hourly=wave_height,wave_period&models=gfs_wave&timezone=Asia%2FTaipei&forecast_days=10`);
                     if (resGfs.ok) dataGfs = await resGfs.json();
                 } catch (e) {
                     console.warn("GFS 輔助模型讀取失敗", e);
                 }
                 
                 document.getElementById('loading').style.display = 'none';
+                
+                let globalHasGfs = false;
+                const globalMergedDays = [];
 
                 for (let i = 0; i < 10; i++) { 
                     const startIndex = i * 24;
@@ -469,26 +474,41 @@
                     for(let h = 4; h <= 19; h++) {
                         const idx = startIndex + h;
                         if(dataBest.hourly.time[idx]) {
-                            const waveBest = dataBest.hourly.wave_height[idx];
-                            
-                            let waveGfs = null;
                             const timeStr = dataBest.hourly.time[idx];
-                            if (dataGfs && dataGfs.hourly && dataGfs.hourly.time) {
-                                const gfsIdx = dataGfs.hourly.time.indexOf(timeStr);
-                                if (gfsIdx !== -1) waveGfs = dataGfs.hourly.wave_height[gfsIdx];
-                            }
-                            
+                            const timestamp = new Date(timeStr).getTime();
+
+                            const waveBest = dataBest.hourly.wave_height[idx];
                             const wavePeriod = dataBest.hourly.wave_period[idx];
                             const waveDir = dataBest.hourly.wave_direction[idx];
                             
+                            let waveGfs = null;
+                            let pGfs = null;
+
+                            if (dataGfs && dataGfs.hourly && dataGfs.hourly.time) {
+                                const gfsIdx = dataGfs.hourly.time.indexOf(timeStr);
+                                if (gfsIdx !== -1) {
+                                    waveGfs = dataGfs.hourly.wave_height[gfsIdx];
+                                    pGfs = dataGfs.hourly.wave_period ? dataGfs.hourly.wave_period[gfsIdx] : null;
+                                }
+                            }
+
+                            if (waveGfs !== null) globalHasGfs = true;
+
+                            // 能量指數計算 (E = 1.96 * H^2 * T^2)
+                            let waveEnergy = null;
+                            if (waveBest !== null && wavePeriod !== null) {
+                                waveEnergy = parseFloat((1.96 * Math.pow(waveBest, 2) * Math.pow(wavePeriod, 2)).toFixed(1));
+                            } else if (waveGfs !== null && pGfs !== null) {
+                                waveEnergy = parseFloat((1.96 * Math.pow(waveGfs, 2) * Math.pow(pGfs, 2)).toFixed(1));
+                            }
+
                             const wind = dataWeather.hourly.windspeed_10m[idx];
                             const windDir = dataWeather.hourly.winddirection_10m[idx];
                             const weatherCode = dataWeather.hourly.weathercode[idx];
-                            const timestamp = new Date(timeStr).getTime();
                             
                             mergedData.push({ 
                                 type: 'hourly', time: timestamp, 
-                                waveBest, waveGfs, wavePeriod, waveDir, wind, windDir, weatherCode 
+                                waveBest, waveGfs, wavePeriod, waveDir, wind, windDir, weatherCode, waveEnergy
                             });
 
                             if (h % 2 === 0) {
@@ -506,19 +526,29 @@
                     tidesArray.forEach(t => {
                         mergedData.push({ 
                             type: t.type, time: t.time, 
-                            waveBest: null, waveGfs: null, wavePeriod: null, waveDir: null, wind: null, windDir: null, weatherCode: null 
+                            waveBest: null, waveGfs: null, wavePeriod: null, waveDir: null, wind: null, windDir: null, weatherCode: null, waveEnergy: null
                         });
                     });
 
                     mergedData.sort((a, b) => a.time - b.time);
+                    
+                    globalMergedDays.push({
+                        titleDate, mergedData, weatherStripData, maxWaveBest, maxWind, maxPeriod, majorWaveDir, majorWindDir
+                    });
+                }
 
+                // 防呆隱藏圖例標籤
+                document.getElementById('legend-gfs').style.display = globalHasGfs ? 'inline-block' : 'none';
+
+                globalMergedDays.forEach((dayData, i) => {
                     const chartLabels = [];
                     const chartWavesBest = [];
                     const chartWavesGfs = [];
                     const chartWinds = [];
+                    const chartEnergies = [];
                     const metaData = []; 
                     
-                    mergedData.forEach(item => {
+                    dayData.mergedData.forEach(item => {
                         const d = new Date(item.time);
                         const timeStr = `${d.getHours().toString().padStart(2,'0')}:${d.getMinutes().toString().padStart(2,'0')}`;
                         
@@ -532,11 +562,12 @@
                         chartWavesBest.push(item.waveBest);
                         chartWavesGfs.push(item.waveGfs);
                         chartWinds.push(item.wind);
+                        chartEnergies.push(item.waveEnergy);
                         metaData.push({ period: item.wavePeriod, waveDir: item.waveDir, windDir: item.windDir, weatherCode: item.weatherCode });
                     });
 
                     let weatherStripHTML = '';
-                    weatherStripData.forEach(w => {
+                    dayData.weatherStripData.forEach(w => {
                         weatherStripHTML += `
                             <div class="weather-slot">
                                 <span class="weather-time">${w.time}</span>
@@ -550,17 +581,17 @@
                     const canvasId = `chart-${i}`;
                     
                     let maxWindColor = 'var(--secondary)';
-                    if (maxWind >= 9) maxWindColor = 'var(--danger)'; 
-                    else if (maxWind >= 6) maxWindColor = 'var(--warning)'; 
+                    if (dayData.maxWind >= 9) maxWindColor = 'var(--danger)'; 
+                    else if (dayData.maxWind >= 6) maxWindColor = 'var(--warning)'; 
 
                     card.innerHTML = `
-                        <div class="date-title">📅 ${titleDate}</div>
+                        <div class="date-title">📅 ${dayData.titleDate}</div>
                         <div class="summary-grid">
-                            <div class="summary-item">綜合浪高 <strong class="wave-text">${maxWaveBest.toFixed(2)}m</strong></div>
-                            <div class="summary-item">最大風速 <strong style="color: ${maxWindColor};">${maxWind.toFixed(2)}m/s</strong></div>
-                            <div class="summary-item">最大週期 <strong class="period-text">${maxPeriod.toFixed(1)}s</strong></div>
-                            <div class="summary-item">主導浪向 <strong class="dir-text">${getDirectionArrow(majorWaveDir)} ${majorWaveDir}°</strong></div>
-                            <div class="summary-item">主導風向 <strong class="dir-text">${getDirectionArrow(majorWindDir)} ${majorWindDir}°</strong></div>
+                            <div class="summary-item">綜合浪高 <strong class="wave-text">${dayData.maxWaveBest.toFixed(2)}m</strong></div>
+                            <div class="summary-item">最大風速 <strong style="color: ${maxWindColor};">${dayData.maxWind.toFixed(2)}m/s</strong></div>
+                            <div class="summary-item">最大週期 <strong class="period-text">${dayData.maxPeriod.toFixed(1)}s</strong></div>
+                            <div class="summary-item">主導浪向 <strong class="dir-text">${getDirectionArrow(dayData.majorWaveDir)} ${dayData.majorWaveDir}°</strong></div>
+                            <div class="summary-item">主導風向 <strong class="dir-text">${getDirectionArrow(dayData.majorWindDir)} ${dayData.majorWindDir}°</strong></div>
                         </div>
                         <div class="weather-strip">
                             ${weatherStripHTML}
@@ -576,51 +607,68 @@
                     gradient.addColorStop(0, 'rgba(9, 132, 227, 0.3)');
                     gradient.addColorStop(1, 'rgba(9, 132, 227, 0.0)');
 
+                    const datasetsConfig = [
+                        {
+                            type: 'line', 
+                            label: '能量指數 (kJ)', data: chartEnergies, 
+                            backgroundColor: 'rgba(243, 156, 18, 0.15)', 
+                            borderColor: '#f39c12',
+                            borderWidth: 2, 
+                            fill: true,
+                            tension: 0.4,
+                            pointRadius: 0,
+                            pointHitRadius: 10,
+                            spanGaps: true,
+                            yAxisID: 'y2', 
+                            order: 3
+                        },
+                        {
+                            type: 'line', label: '綜合預報 (m)', data: chartWavesBest, 
+                            borderColor: '#0984e3', backgroundColor: gradient,
+                            borderWidth: 3, pointRadius: 0, pointHitRadius: 10, fill: true, tension: 0.4, yAxisID: 'y', spanGaps: true, order: 1 
+                        }
+                    ];
+
+                    if (globalHasGfs) {
+                        datasetsConfig.push({
+                            type: 'line', label: 'GFS 輔助模型 (m)', data: chartWavesGfs, 
+                            borderColor: '#9b59b6', borderWidth: 1.5, borderDash: [4, 4], pointRadius: 0, pointHitRadius: 10, fill: false, tension: 0.4, yAxisID: 'y', spanGaps: true, order: 2
+                        });
+                    }
+
+                    datasetsConfig.push({
+                        type: 'line', label: '風速 (m/s)', data: chartWinds, 
+                        borderWidth: 2, borderDash: [2, 2], pointRadius: 0, pointHitRadius: 10, fill: false, tension: 0.4, yAxisID: 'y1', spanGaps: true, order: 0,
+                        segment: {
+                            borderColor: ctx => {
+                                const val = Math.max(ctx.p0.parsed.y, ctx.p1.parsed.y);
+                                if (val >= 9) return '#d63031'; 
+                                if (val >= 6) return '#f39c12'; 
+                                return '#00b894';               
+                            }
+                        }
+                    });
+
                     const newChart = new Chart(ctx, {
                         type: 'line',
                         data: {
                             labels: chartLabels, 
-                            datasets: [
-                                {
-                                    label: '綜合預報 (m)', data: chartWavesBest, 
-                                    borderColor: '#0984e3', backgroundColor: gradient,
-                                    borderWidth: 3, pointRadius: 0, pointHitRadius: 10, fill: true, tension: 0.4, yAxisID: 'y',
-                                    spanGaps: true 
-                                },
-                                {
-                                    label: 'GFS 模型 (m)', data: chartWavesGfs, 
-                                    borderColor: '#9b59b6', 
-                                    borderWidth: 1.5, borderDash: [4, 4], pointRadius: 0, pointHitRadius: 10, fill: false, tension: 0.4, yAxisID: 'y',
-                                    spanGaps: true 
-                                },
-                                {
-                                    label: '風速 (m/s)', data: chartWinds, 
-                                    borderWidth: 2, borderDash: [2, 2], pointRadius: 0, pointHitRadius: 10, fill: false, tension: 0.4, yAxisID: 'y1',
-                                    spanGaps: true,
-                                    segment: {
-                                        borderColor: ctx => {
-                                            const val = Math.max(ctx.p0.parsed.y, ctx.p1.parsed.y);
-                                            if (val >= 9) return '#d63031'; 
-                                            if (val >= 6) return '#f39c12'; 
-                                            return '#00b894';               
-                                        }
-                                    }
-                                }
-                            ]
+                            datasets: datasetsConfig
                         },
                         options: {
                             responsive: true, maintainAspectRatio: false,
                             plugins: { 
                                 legend: { display: false }, 
                                 tooltip: { 
-                                    mode: 'index', 
-                                    intersect: false,
+                                    mode: 'index', intersect: false,
                                     callbacks: { 
                                         label: function(context) { 
                                             if(context.raw === null || context.raw === undefined) return null; 
-                                            if(context.datasetIndex === 0) return context.parsed.y.toFixed(2) + ' m (綜合浪高)';
-                                            if(context.datasetIndex === 1) return context.parsed.y.toFixed(2) + ' m (GFS 輔助)';
-                                            if(context.datasetIndex === 2) return context.parsed.y.toFixed(2) + ' m/s (風速)'; 
+                                            const labelText = context.dataset.label;
+                                            if(labelText.includes('能量')) return context.parsed.y.toFixed(1) + ' kJ (能量)';
+                                            if(labelText.includes('綜合')) return context.parsed.y.toFixed(2) + ' m (綜合浪高)';
+                                            if(labelText.includes('GFS')) return context.parsed.y.toFixed(2) + ' m (GFS)';
+                                            if(labelText.includes('風速')) return context.parsed.y.toFixed(1) + ' m/s (風速)'; 
                                         },
                                         afterBody: function(context) {
                                             const idx = context[0].dataIndex;
@@ -661,21 +709,14 @@
                                         }
                                     } 
                                 },
-                                y: { 
-                                    type: 'linear', display: true, position: 'left', beginAtZero: true, suggestedMax: 2.0, 
-                                    grid: { color: '#f1f2f6' }, ticks: { color: '#0984e3' },
-                                    title: { display: true, text: '浪高 (m)', color: '#0984e3', font: { weight: 'bold', size: 12 } }
-                                },
-                                y1: { 
-                                    type: 'linear', display: true, position: 'right', beginAtZero: true, suggestedMax: 10, 
-                                    grid: { drawOnChartArea: false }, ticks: { color: '#636e72' },
-                                    title: { display: true, text: '風速 (m/s)', color: '#636e72', font: { weight: 'bold', size: 12 } }
-                                }
+                                y: { type: 'linear', display: true, position: 'left', beginAtZero: true, suggestedMax: 2.0, grid: { color: '#f1f2f6' }, ticks: { color: '#0984e3' }, title: { display: true, text: '浪高 (m)', color: '#0984e3', font: { weight: 'bold', size: 12 } } },
+                                y1: { type: 'linear', display: true, position: 'right', beginAtZero: true, suggestedMax: 10, grid: { drawOnChartArea: false }, ticks: { color: '#636e72' }, title: { display: true, text: '風速 (m/s)', color: '#636e72', font: { weight: 'bold', size: 12 } } },
+                                y2: { type: 'linear', display: false, position: 'right', beginAtZero: true, suggestedMax: 500 }
                             }
                         }
                     });
                     chartInstances.push(newChart);
-                }
+                });
             } catch (error) {
                 console.error(error);
                 grid.innerHTML = `<div class="alert">網路連線發生錯誤。請確認網路狀態或 API 服務是否正常。</div>`;
@@ -696,17 +737,21 @@
             const lons = spotKeys.map(k => spots[k].lon).join(',');
 
             try {
-                const url = `https://marine-api.open-meteo.com/v1/marine?latitude=${lats}&longitude=${lons}&hourly=wave_height&timezone=Asia%2FTaipei&forecast_days=10`;
+                const url = `https://marine-api.open-meteo.com/v1/marine?latitude=${lats}&longitude=${lons}&hourly=wave_height,wave_period&timezone=Asia%2FTaipei&forecast_days=10`;
                 const urlWeather = `https://api.open-meteo.com/v1/forecast?latitude=${lats}&longitude=${lons}&hourly=windspeed_10m&wind_speed_unit=ms&timezone=Asia%2FTaipei&forecast_days=10`;
+                const urlGfs = `https://marine-api.open-meteo.com/v1/marine?latitude=${lats}&longitude=${lons}&hourly=wave_height,wave_period&models=gfs_wave&timezone=Asia%2FTaipei&forecast_days=10`;
 
-                const [response, resWeather] = await Promise.all([
+                const [response, resWeather, resGfs] = await Promise.all([
                     fetch(url),
-                    fetch(urlWeather)
+                    fetch(urlWeather),
+                    fetch(urlGfs).catch(() => null)
                 ]);
+                
                 if (!response.ok || !resWeather.ok) throw new Error("API 伺服器回應錯誤");
                 
                 const dataArray = await response.json();
                 const weatherArray = await resWeather.json();
+                const gfsArray = (resGfs && resGfs.ok) ? await resGfs.json() : null;
                 document.getElementById('loading').style.display = 'none';
 
                 const timeArray = dataArray[0].hourly.time;
@@ -735,6 +780,7 @@
                 }
 
                 const matchingSpots = [];
+                let anyGfsAvailable = false;
 
                 dataArray.forEach((spotData, index) => {
                     const spotKey = spotKeys[index];
@@ -773,17 +819,35 @@
                     if(filterVal === '1.0-1.5' && avgMax >= 1.0 && avgMax <= 1.5) matches = true;
 
                     if (matches) {
+                        const gfsVals = [], energyVals = [];
+
+                        spotData.hourly.time.forEach((timeStr, oIdx) => {
+                            let wGfs = null;
+                            if (gfsArray && gfsArray[index] && gfsArray[index].hourly && gfsArray[index].hourly.time) {
+                                wGfs = gfsArray[index].hourly.wave_height[oIdx];
+                            }
+                            gfsVals.push(wGfs);
+                            if (wGfs !== null) anyGfsAvailable = true;
+
+                            let waveEnergy = null;
+                            const h = spotData.hourly.wave_height[oIdx];
+                            const p = spotData.hourly.wave_period ? spotData.hourly.wave_period[oIdx] : null;
+                            if (h != null && p != null) waveEnergy = parseFloat((1.96 * Math.pow(h, 2) * Math.pow(p, 2)).toFixed(1));
+                            energyVals.push(waveEnergy);
+                        });
+
                         matchingSpots.push({
-                            spotKey: spotKey,
-                            name: spotName,
-                            satRange: getRange(satWave),
-                            sunRange: getRange(sunWave),
+                            spotKey: spotKey, name: spotName,
+                            satRange: getRange(satWave), sunRange: getRange(sunWave),
                             waveTimes: spotData.hourly.time,
                             waveValues: spotData.hourly.wave_height,
+                            gfsValues: gfsVals, energyValues: energyVals,
                             windValues: weatherArray[index].hourly.windspeed_10m
                         });
                     }
                 });
+
+                document.getElementById('legend-gfs').style.display = anyGfsAvailable ? 'inline-block' : 'none';
 
                 if(matchingSpots.length === 0) {
                     grid.innerHTML = '<div class="alert">本週末沒有平均浪高落在此區間的浪點。</div>';
@@ -821,67 +885,66 @@
                             return `${m}/${day}(${wk}) ${hr}:00`;
                         });
                         
+                        const weekendDatasets = [
+                            {
+                                type: 'line', 
+                                label: '能量指數 (kJ)', data: spot.energyValues,
+                                backgroundColor: 'rgba(243, 156, 18, 0.15)', 
+                                borderColor: '#f39c12', 
+                                borderWidth: 2, 
+                                fill: true,
+                                tension: 0.4,
+                                pointRadius: 0,
+                                spanGaps: true,
+                                yAxisID: 'y2', 
+                                order: 4
+                            },
+                            {
+                                type: 'line', label: '浪高 (m)', data: spot.waveValues,
+                                borderColor: '#0984e3', backgroundColor: 'rgba(9, 132, 227, 0.1)', borderWidth: 2, pointRadius: 0, fill: true, tension: 0.4, yAxisID: 'y', order: 1
+                            }
+                        ];
+
+                        if (spot.gfsValues.some(v => v !== null)) {
+                            weekendDatasets.push({
+                                type: 'line', label: 'GFS 輔助模型 (m)', data: spot.gfsValues,
+                                borderColor: '#9b59b6', borderWidth: 1, borderDash: [3, 3], pointRadius: 0, fill: false, tension: 0.4, yAxisID: 'y', order: 2
+                            });
+                        }
+
+                        weekendDatasets.push({
+                            type: 'line', label: '風速 (m/s)', data: spot.windValues,
+                            borderColor: '#00b894', borderWidth: 1.5, borderDash: [3, 3], pointRadius: 0, fill: false, tension: 0.4, yAxisID: 'y1', order: 0
+                        });
+
                         const miniChart = new Chart(ctx, {
                             type: 'line',
-                            data: {
-                                labels: labels,
-                                datasets: [{
-                                    label: '浪高 (m)',
-                                    data: spot.waveValues,
-                                    borderColor: '#0984e3',
-                                    backgroundColor: 'rgba(9, 132, 227, 0.1)',
-                                    borderWidth: 2,
-                                    pointRadius: 0,
-                                    fill: true,
-                                    tension: 0.4,
-                                    yAxisID: 'y'
-                                }, {
-                                    label: '風速 (m/s)',
-                                    data: spot.windValues,
-                                    borderColor: '#00b894',
-                                    borderWidth: 1.5,
-                                    borderDash: [3, 3],
-                                    pointRadius: 0,
-                                    fill: false,
-                                    tension: 0.4,
-                                    yAxisID: 'y1'
-                                }]
-                            },
+                            data: { labels: labels, datasets: weekendDatasets },
                             options: {
-                                responsive: true,
-                                maintainAspectRatio: false,
-                                plugins: { legend: { display: true, labels: { font: { size: 8 } } } },
+                                responsive: true, maintainAspectRatio: false,
+                                plugins: { 
+                                    legend: { display: true, labels: { font: { size: 8 } } },
+                                    tooltip: {
+                                        mode: 'index', intersect: false,
+                                        callbacks: {
+                                            label: function(context) {
+                                                const labelText = context.dataset.label;
+                                                if(labelText.includes('能量')) return context.parsed.y.toFixed(1) + ' kJ (能量)';
+                                                if(labelText.includes('浪高')) return context.parsed.y.toFixed(2) + ' m (綜合)';
+                                                if(labelText.includes('GFS')) return context.parsed.y.toFixed(2) + ' m (GFS)';
+                                                if(labelText.includes('風速')) return context.parsed.y.toFixed(1) + ' m/s (風速)';
+                                            }
+                                        }
+                                    }
+                                },
                                 scales: {
                                     x: {
-                                        ticks: {
-                                            font: { size: 8 },
-                                            callback: function(val, index) {
-                                                const label = this.getLabelForValue(val);
-                                                if (label.includes('08:00')) return label.split(' ')[0];
-                                                return null;
-                                            }
-                                        },
+                                        ticks: { font: { size: 8 }, callback: function(val, index) { const label = this.getLabelForValue(val); if (label.includes('08:00')) return label.split(' ')[0]; return null; } },
                                         grid: { display: false }
                                     },
-                                    y: {
-                                        type: 'linear',
-                                        display: true,
-                                        position: 'left',
-                                        beginAtZero: true,
-                                        suggestedMax: 2.0,
-                                        ticks: { font: { size: 8 }, color: '#0984e3' },
-                                        title: { display: false }
-                                    },
-                                    y1: {
-                                        type: 'linear',
-                                        display: true,
-                                        position: 'right',
-                                        beginAtZero: true,
-                                        suggestedMax: 10,
-                                        grid: { drawOnChartArea: false },
-                                        ticks: { font: { size: 8 }, color: '#00b894' },
-                                        title: { display: false }
-                                    }
+                                    y: { type: 'linear', display: true, position: 'left', beginAtZero: true, suggestedMax: 2.0, ticks: { font: { size: 8 }, color: '#0984e3' }, title: { display: false } },
+                                    y1: { type: 'linear', display: true, position: 'right', beginAtZero: true, suggestedMax: 10, grid: { drawOnChartArea: false }, ticks: { font: { size: 8 }, color: '#00b894' }, title: { display: false } },
+                                    y2: { type: 'linear', display: false, position: 'right', beginAtZero: true, suggestedMax: 500 }
                                 }
                             }
                         });
